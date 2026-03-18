@@ -1,0 +1,56 @@
+env_params:
+  env_id: "highway-v0"
+  lanes_count: 5
+  vehicles_count: 0          # Total ambient cars
+  controlled_vehicles: &controlled_vehicles 1      # 1 SUT + 6 Adversaries
+  vehicle_density: 0.0
+  duration: 60                # Seconds per episode
+  simulation_frequency: 10
+  policy_frequency: 10        # How often MPC is called
+  initial_lane_id: 0
+
+  action:
+    type: "MultiAgentAction"
+    action_config:
+      type: "ContinuousAction"  # Allows "Squeezing"
+      longitudinal: true
+      lateral: true
+
+  observation:
+    type: "MultiAgentObservation"
+    observation_config:
+      type: "Kinematics"
+      normalize: false
+      absolute: true
+      vehicles_count: *controlled_vehicles
+      features: ["presence", "x", "y", "vx", "vy", "heading"]
+
+vehiclemodel_params:  # not normalized
+  wheelbase_L: 2.5                # in meters
+  max_steer_rad: 0.174            # approx. 10 degrees in rad (VOLVO STANDARD)
+  max_long_accel_ms2: 1.0         # in m/s^2 (VOLVO STANDARD)
+  min_long_accel_ms2: -4.0        # in m/s^2 (VOLVO STANDARD)
+  # for comfort and jerk penalties
+  max_steering_rate_rads: 0.296   # in rad/s (for comfort)
+  min_steering_rate_rads: -0.296  # in rad/s (if using rate-of-change inputs) 
+
+  safety_margins:
+    longitudinal_margin: 5.0
+    lateral_margin: 2.0
+  # maybe add lateral acceleration constraints too for actual lane changes?
+  # a_lat = velocity times yaw rate
+
+sutlanechanger_mpc_params:
+  type: "MPC"
+  horizon_N: 20
+  dt: 0.1
+
+  target_v: 30.0
+  target_d: 8.0
+
+  Q_lateral: 10.0
+  Q_velocity: 1.0
+  R_steering: 0.1
+  R_accel: 0.05
+  
+
