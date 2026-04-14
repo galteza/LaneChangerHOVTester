@@ -41,3 +41,11 @@ def create_longitudinal_mpc():
 
     mpc.setup()
     return mpc, model
+
+def get_tvp_template(self):
+    tvp_template = self.mpc.get_tvp_template()
+    return tvp_template
+
+
+def make_step(self, current_state):
+    return self.mpc.make_step(current_state)
