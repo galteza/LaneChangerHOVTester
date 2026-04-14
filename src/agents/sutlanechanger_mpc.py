@@ -1,5 +1,6 @@
 import do_mpc
 import casadi as ca
+from env.highway_env_mergeexit import MergeExitLaneHighway_Environment
 
 class SUTLaneChanger_MPC:
     def __init__(self, env_params, vehiclemodel_params, sutlanechanger_mpc_params):
@@ -13,14 +14,16 @@ class SUTLaneChanger_MPC:
         self.longitudinal_margin = vehiclemodel_params['safety_margins']['longitudinal_margin']
         self.lateral_margin = vehiclemodel_params['safety_margins']['lateral_margin']
 
-
         self.horizon_N = sutlanechanger_mpc_params['horizon_N']
         self.dt = sutlanechanger_mpc_params['dt']
         self.target_v = sutlanechanger_mpc_params['target_v']
         self.target_d = (env_params['lanes_count'] - 1) * 4.0 # sutlanechanger_mpc_params['target_d']
+        self.target_s = ()
+        self.target_heading = 
 
         self.Q_lateral = sutlanechanger_mpc_params['Q_lateral']
         self.Q_velocity = sutlanechanger_mpc_params['Q_velocity']
+        self.Q_heading = sutlanechanger_mpc_params['Q_heading']
         self.R_steering = sutlanechanger_mpc_params['R_steering']
         self.R_accel = sutlanechanger_mpc_params['R_accel']
 
@@ -31,11 +34,11 @@ class SUTLaneChanger_MPC:
         self._setup_mpc()
 
     def _setup_mpc(self):
-        # === 1. REGISTER THE TYPE OF MODEL FOR MPC
+        # === 1. REGISTER THE TYPE OF MODEL FOR MPC ===
         model_type = 'continuous'
         self.model = do_mpc.model.Model(model_type)
 
-        # === 2. REGISTER STATE-SPACE REPRESENTATION/EOM USING KBM + TIME-VARYING PARAMS
+        # === 2. REGISTER STATE-SPACE REPRESENTATION/EOM USING KBM + TIME-VARYING PARAMS ===
 
             # STATES (x)
         s = self.model.set_variable(var_type='_x', var_name='s')         # distance along road
@@ -47,27 +50,32 @@ class SUTLaneChanger_MPC:
         steering = self.model.set_variable(var_type='_u', var_name='steering')       # steering angle
         accel = self.model.set_variable(var_type='_u', var_name='accel')             # longitudinal acceleration
 
-            # TIME-VARYING PARAMETERS (TVP)
 
-        self.model.set_variable(var_type='_tvp', var_name='target_d')
-        self.model.set_variable(var_type='_tvp', var_name='target_v')
-
-        for i in range(self.observed_vehicles_count):
-            self.model.set_variable(var_type='_tvp', var_name=f'obs_{i}_x')
-            self.model.set_variable(var_type='_tvp', var_name=f'obs_{i}_y')
-
-        # === 3. REGISTER RIGHT-HAND SIDE
+        # === 3. REGISTER RIGHT-HAND SIDE ===
 
         self.model.set_rhs('s', v * ca.cos(psi))
         self.model.set_rhs('d', v * ca.sin(psi))
         self.model.set_rhs('psi', (v / self.wheelbase_L) * ca.tan(steering))
         self.model.set_rhs('v', accel)
 
-        # === 4. DEPLOY MODEL
+
+        # === 4. REGISTER TIME-VARYING PARAMETERS (TVP) ===
+
+        self.model.set_variable(var_type='_tvp', var_name='target_d')
+        self.model.set_variable(var_type='_tvp', var_name='target_v')
+        self.model.set_variable(var_type='_tvp', var_name='target_psi')
+        self.model.set_variable(var_type='_tvp', var_name='d_min')
+        self.model.set_variable(var_type='_tvp', var_name='d_max')
+
+        for i in range(self.observed_vehicles_count):
+            self.model.set_variable(var_type='_tvp', var_name=f'obs_{i}_x')
+            self.model.set_variable(var_type='_tvp', var_name=f'obs_{i}_y')
+
+        # === 5. DEPLOY MODEL ===
 
         self.model.setup()
 
-        # === 5. REGISTER CONTROLLER
+        # === 6. REGISTER CONTROLLER ===
 
         self.mpc = do_mpc.controller.MPC(self.model)
 
@@ -99,7 +107,11 @@ class SUTLaneChanger_MPC:
         
         # === 6. ESTABLISH COST FUNCTION
 
-        lterm = self.Q_lateral * (d - self.model.tvp['target_d'])**2 + self.Q_velocity * (v - self.model.tvp['target_v'])**2 # Lagrange/term with Q matrix
+        lterm = (self.Q_lateral * (d - self.model.tvp['target_d'])**2 
+                 + self.Q_velocity * (v - self.model.tvp['target_v'])**2 
+                 + self.Q_psi * (psi - self.model.tvp['target_psi'])
+                ) # Lagrange/term with Q matrix
+        
         mterm = self.Q_lateral * (d - self.model.tvp['target_d'])**2 # Mayer term 
         self.mpc.set_objective(mterm=mterm, lterm=lterm)
 
@@ -138,6 +150,7 @@ class SUTLaneChanger_MPC:
         tvp_template = self.mpc.get_tvp_template()
 
         for k in range(self.horizon_N + 1):
+
             # target distance and velocity do not change (ASSUMED)
             tvp_template['_tvp', k, 'target_d'] = target_d
             tvp_template['_tvp', k, 'target_v'] = target_v
@@ -152,7 +165,7 @@ class SUTLaneChanger_MPC:
                     observed_vx_current = observation_matrix[i][3]
                     observed_vy_current = observation_matrix[i][4]
 
-                    # POSITION PREDICTION FOR CAR
+                    # POSITION PREDICTION FOR EACH CAR
 
                     predicted_x = observed_x_current + observed_vx_current * (k * self.dt)
                     predicted_y = observed_y_current + observed_vy_current * (k * self.dt)

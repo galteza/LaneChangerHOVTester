@@ -1,13 +1,28 @@
 env_params:
+  # Merge geometry
   env_id: "highway-v0"
   lanes_count: 5
+  lane_width_m: 4
+  ends_m: [150, 80, 80, 300, 80, 80, 150] # Establishing lengths of each section
+  merge_amplitude: 3.25
+
+  # Vehicle configuration
   vehicles_count: 0          # Total ambient cars
   controlled_vehicles: &controlled_vehicles 1      # 1 SUT + 6 Adversaries
   vehicle_density: 0.0
+  initial_lane_id: 0
+  initial_spacing: 2
+
+  # Simulation configuration
   duration: 60                # Seconds per episode
   simulation_frequency: 10
   policy_frequency: 10        # How often MPC is called
-  initial_lane_id: 0
+
+  # Camera setings
+  scaling: 3
+  screen_width: 1200
+  screen_height: 400
+  centering_position: [0.2, 0.5]
 
   action:
     type: "MultiAgentAction"
@@ -30,6 +45,8 @@ vehiclemodel_params:  # not normalized
   max_steer_rad: 0.174            # approx. 10 degrees in rad (VOLVO STANDARD)
   max_long_accel_ms2: 1.0         # in m/s^2 (VOLVO STANDARD)
   min_long_accel_ms2: -4.0        # in m/s^2 (VOLVO STANDARD)
+  target_heading_angle: 0
+  max_yaw_rads: 0.087
   # for comfort and jerk penalties
   max_steering_rate_rads: 0.296   # in rad/s (for comfort)
   min_steering_rate_rads: -0.296  # in rad/s (if using rate-of-change inputs) 
