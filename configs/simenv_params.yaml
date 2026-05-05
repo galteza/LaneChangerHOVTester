@@ -58,7 +58,6 @@ vehiclemodel_params:  # not normalized
   # a_lat = velocity times yaw rate
 
 sutlanechanger_mpc_params:
-  type: "MPC"
   horizon_N: 20
   dt: 0.1
 
@@ -70,4 +69,11 @@ sutlanechanger_mpc_params:
   R_steering: 0.1
   R_accel: 0.05
   
+  utilweight_avetravtimeperlane: 1
+  utilweight_avetimegapdensityperlane: 1
+  utilweight_remainingtravtime: 1
+  utilweight_urgency: 1
 
+  nonzerodivparam_avetravtimeperlane: 2 # gamma
+  scalingparam_avetimegapdensityperlane: 2 # alpha > 1
+  urgencyfactor_urgency: 0.0075 # kappa

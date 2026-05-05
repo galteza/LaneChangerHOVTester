@@ -1,5 +1,7 @@
 import numpy as np
 import time
+import yaml
+import os
 
 from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.road import Road, RoadNetwork
@@ -17,6 +19,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     @classmethod
     def default_config(cls) -> dict:
         config = super().default_config()
+
+        config_path = os.path.join(os.path.dirname(__file__), "simenv_params.yaml")
+
         config.update({
             # === STARTER CONFIGS ===
 
