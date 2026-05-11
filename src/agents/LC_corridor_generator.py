@@ -3,8 +3,8 @@ class MapService:
         self.lanes_count = env_params['lanes_count']
         self.lane_width_m = env_params['lane_width_m']
         self.ends_m = env_params['ends_m']
-        self.merge_amplitude = []
-        self.horizons = 
+        self.merge_amplitude = env_params['merge_amplitude']
+        self.time_horizon = env_params 
     
     def get_borders_for_timehorizon():
 

@@ -8,7 +8,7 @@ env_params:
 
   # Vehicle configuration
   vehicles_count: 0          # Total ambient cars
-  controlled_vehicles: &controlled_vehicles 1      # 1 SUT + 6 Adversaries
+  controlled_vehicles: &controlled_vehicles 11      # 1 SUT + 6 Adversaries
   vehicle_density: 0.0
   initial_lane_id: 0
   initial_spacing: 2
@@ -43,10 +43,15 @@ env_params:
 vehiclemodel_params:  # not normalized
   wheelbase_L: 2.5                # in meters
   max_steer_rad: 0.174            # approx. 10 degrees in rad (VOLVO STANDARD)
+  min_steer_rad: -0.174
   max_long_accel_ms2: 1.0         # in m/s^2 (VOLVO STANDARD)
   min_long_accel_ms2: -4.0        # in m/s^2 (VOLVO STANDARD)
+  max_long_vel_ms: 30
+
+  max_yaw_rad: 0.087
+  min_yaw_rad: -0.087
+
   target_heading_angle: 0
-  max_yaw_rads: 0.087
   # for comfort and jerk penalties
   max_steering_rate_rads: 0.296   # in rad/s (for comfort)
   min_steering_rate_rads: -0.296  # in rad/s (if using rate-of-change inputs) 
@@ -61,13 +66,14 @@ sutlanechanger_mpc_params:
   horizon_N: 20
   dt: 0.1
 
-  target_v: 30.0
-  target_d: 8.0
+  Q_s: 10.0
+  Q_v: 5.0
+  R_a: 1.0
 
-  Q_lateral: 10.0
-  Q_velocity: 1.0
-  R_steering: 0.1
-  R_accel: 0.05
+  Q_d: 20.0
+  Q_heading: 50.0
+  R_steer: 100.0
+  
   
   utilweight_avetravtimeperlane: 1
   utilweight_avetimegapdensityperlane: 1
@@ -77,3 +83,9 @@ sutlanechanger_mpc_params:
   nonzerodivparam_avetravtimeperlane: 2 # gamma
   scalingparam_avetimegapdensityperlane: 2 # alpha > 1
   urgencyfactor_urgency: 0.0075 # kappa
+  final_utilweight_factor: 0.1 # zeta
+
+  min_time_gap: 1
+  safety_dist_buffer: 1
+
+  persistence_quota_N: 5

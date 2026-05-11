@@ -7,6 +7,8 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.road.lane import StraightLane, LineType, SineLane
 
+from highway_env.vehicle.behavior import IDMVehicle
+
 class MergeExitLaneHighway_Environment(AbstractEnv):
     """
     A customized environment with an on-ramp and and exit ramp.
@@ -238,10 +240,48 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         self.vehicle = self.controlled_vehicles[0]
 
+    def _make_stock_vehicles(self) -> None:
+
+        
+        self.controlled_vehicles = []
+
+        ego_lane = self.road.network.get_lane(("j", "k", 0))
+
+        ego = IDMVehicle(
+            self.road,
+            ego_lane.position(0, 0),
+            speed = 25,
+            route = [("j", "k", 0),("k","b", 0),("b","c",4),("c","d",4),("d","e",4),("e","l",0),("l","m",0)]
+        )
+
+        # ego = self.action_type.vehicle_class(
+        #     self.road,
+        #     ego_lane.position(0,0),
+        #     speed = 25
+        # )
+
+        self.controlled_vehicles.append(ego)
+        self.road.vehicles.append(ego)
+
+        # ego.plan_route_to("l")
+
+        for lane_idx in range(5):
+            highway_lane = self.road.network.get_lane(("a", "b", lane_idx))
+            for car_idx in range(2):
+                longitudinal_pos_m = 20 - (car_idx * 20)
+
+                vehicle = self.action_type.vehicle_class(
+                    self.road,
+                    highway_lane.position(longitudinal_pos_m, 0),
+                    speed = 0
+                )
+                self.road.vehicles.append(vehicle)
+
+        self.vehicle = self.controlled_vehicles[0]
 
     def _reset(self) -> None:
         self._make_road()
-        self._make_vehicles()
+        self._make_stock_vehicles()
 
     def _reward(self, action: int) -> float:
         """Dummy reward function for MPC testing."""
@@ -254,6 +294,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     def _is_truncated(self) -> bool:
         """Tells the engine to stop if the time limit is reached."""
         return self.time >= self.config["duration"]
+
+
 
 
 env = MergeExitLaneHighway_Environment()

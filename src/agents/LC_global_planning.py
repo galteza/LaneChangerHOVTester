@@ -1,4 +1,5 @@
 import numpy as np
+import yaml
 
 class LaneChangePlanner:
     # Ego makes predictions on trajectories of platoon and where they'll each be at every time instance of the pred. horizon
@@ -43,17 +44,23 @@ class LaneChangePlanner:
 
     # First, find out the desired lane at each instance, and output the desired lane. If desired lane persists for five consecutive instances, pass onto calculating the desired gap. (This will be done in the main file. Where to get current_v_ref and current_desiredtimegap values, still unknown.)
 
-    def determine_desired_lane(self, observation_matrix, current_v, current_v_ref, current_desiredtimegap):
+    def determine_desired_lane(self, observation_matrix, current_v_ref, current_desiredtimegap):
         lane_utilities, ego_observation, extracted_vehicle_observations = self._calculate_neighboring_lane_utilities(observation_matrix, current_v_ref, current_desiredtimegap)
 
-        final_lane_utilities = [lane_utilities[u_idx] - (1 + self.final_utilweight_factor * abs(u_idx - 1)) * abs(lane_utilities[1]) for u_idx in range(len(lane_utilities))]
+        final_lane_utilities = []
+
+        for u_idx in range(len(lane_utilities)):
+            if lane_utilities[u_idx] is None:
+                final_lane_utilities.append(-float('inf'))
+            else:
+                final_lane_utilities.append(lane_utilities[u_idx] - (1 + self.final_utilweight_factor * abs(u_idx - 1)) * abs(lane_utilities[1]))
 
         target_lane_idx = final_lane_utilities.index(max(final_lane_utilities))
 
-        return target_lane_idx, ego_observation, extracted_vehicle_observations, current_v, current_v_ref
+        return target_lane_idx, ego_observation, extracted_vehicle_observations, current_v_ref
 
 
-    def calculate_desired_gap(self, target_lane_idx, ego_observation, extracted_vehicle_observations, current_v, current_v_ref):
+    def calculate_desired_gap(self, target_lane_idx, ego_observation, extracted_vehicle_observations, current_v_ref):
 
         ego_current_dist = ego_observation[1]
         ego_current_v = ego_observation[3]
@@ -78,9 +85,6 @@ class LaneChangePlanner:
         ego_nearest_leader = min(ego_lane_leader_observations, key=lambda vehicle_observation:vehicle_observation[1], default=ego_inf_leader)
         ego_nearest_follower = max(ego_lane_follower_observations, key=lambda vehicle_observation:vehicle_observation[1], default=ego_inf_follower)
 
-        if target_lane_idx == 1:
-            return ego_nearest_follower[1], ego_nearest_leader[1], None
-
         target_farthest_follower_in_range_idx = 0
         for i in range(len(sorted_target_lane_vehicle_observations_by_pos)):
             if sorted_target_lane_vehicle_observations_by_pos[i][1] <= ego_nearest_follower[1]:
@@ -101,13 +105,16 @@ class LaneChangePlanner:
                 self._calculate_gap_utility(
                     sorted_target_lane_vehicle_observations_by_pos[i], 
                     sorted_target_lane_vehicle_observations_by_pos[i + 1],
-                    ego_nearest_leader,
                     ego_nearest_follower,
+                    ego_nearest_leader,
                     ego_current_dist,
-                    current_v,
+                    ego_current_v,
                     current_v_ref
                 )
             )
+
+        if not gap_info:
+            return -float('inf'), float('inf'), None
         
         best_gap_info = max(gap_info, key=lambda gap:gap[0])
         best_time_instance = best_gap_info[1]
@@ -187,24 +194,28 @@ class LaneChangePlanner:
 
         ego_vehicle_observation, extracted_vehicle_observations = self._separate_vehicle_observations(observation_matrix)
 
+        print(extracted_vehicle_observations)
+
         same_lane_vehicle_observations = extracted_vehicle_observations[1]
         next_lane_vehicle_observations = extracted_vehicle_observations[0]
         prev_lane_vehicle_observations = extracted_vehicle_observations[2]
 
         ego_s = observation_matrix[0][1]
 
-        for lane_vehicle_observations in [next_lane_vehicle_observations,
+        for lane_idx, lane_vehicle_observations in enumerate([next_lane_vehicle_observations,
                                             same_lane_vehicle_observations,
-                                            prev_lane_vehicle_observations]:
-            if lane_vehicle_observations == [] or lane_vehicle_observations is None:
+                                            prev_lane_vehicle_observations]):
+            if lane_vehicle_observations is None:
                 lane_utilities.append(None)
             else:
-                lane_idx = int(lane_vehicle_observations[0][2] // self.lane_width_m)
+                global_lane_idx = int(ego_vehicle_observation[2] // self.lane_width_m) + lane_idx - 1
+
+                print(f"LANE {global_lane_idx}")
 
                 utility_avetravtimeperlane = self._calculate_utility_avetravtimeperlane(lane_vehicle_observations, current_v_ref)
                 utility_avetimegapdensityperlane = self._calculate_utility_avetimegapdensityperlane(lane_vehicle_observations, current_desiredtimegap)
                 utility_remainingtravtime = self._calculate_utility_remainingtravtime(lane_vehicle_observations, ego_s, current_v_ref, self.target_s)
-                utility_urgency = self._calculate_utility_urgency(ego_s, self.target_s, lane_idx)
+                utility_urgency = self._calculate_utility_urgency(ego_s, self.target_s, global_lane_idx)
 
                 total_utility = (
                     self.utilweight_avetravtimeperlane * utility_avetravtimeperlane + 
@@ -215,6 +226,7 @@ class LaneChangePlanner:
 
                 lane_utilities.append(total_utility)
 
+        print(lane_utilities)
         return lane_utilities, ego_vehicle_observation, extracted_vehicle_observations
 
     def _separate_vehicle_observations(self, observation_matrix):
@@ -223,6 +235,7 @@ class LaneChangePlanner:
         prev_lane_vehicle_observations = []
 
         ego_lane_idx = int(observation_matrix[0][2] // self.lane_width_m)
+        print(ego_lane_idx)
         next_lane_idx = ego_lane_idx - 1
         prev_lane_idx = ego_lane_idx + 1
 
@@ -234,7 +247,7 @@ class LaneChangePlanner:
             prev_lane_idx = None
             prev_lane_vehicle_observations = None
 
-        for i in range(1, self.observed_vehicles_count):
+        for i in range(1, len(observation_matrix)):
             observed_vehicle_lane_idx = int(observation_matrix[i][2] // self.lane_width_m)
             if ego_lane_idx == observed_vehicle_lane_idx:
                 same_lane_vehicle_observations.append(observation_matrix[i])
@@ -255,17 +268,22 @@ class LaneChangePlanner:
         # utility of the lane accounts for the mean velocity of all the cars in a lane in seeing if the desired average velocity matches
 
         if len(vehicle_observations) == 0 or not vehicle_observations:
+            print("U_avetravtimeperlane: 0")
             return 0
         else:
             vehicle_velocities = [vehicle_observation[3] for vehicle_observation in vehicle_observations]
             avevelocityperlane = sum(vehicle_velocities) / len(vehicle_velocities)
 
+            print(avevelocityperlane)
+
             utility_avetravtimeperlane = -abs(
-                self.time_horizon - (self.time_horizon * current_v_ref / max([avevelocityperlane, self.nonzerodivparam_avetravtimeperlane]))
+                self.time_horizon - (self.time_horizon * current_v_ref / max(avevelocityperlane, self.nonzerodivparam_avetravtimeperlane))
             ) / abs(
                 self.time_horizon - (self.time_horizon * current_v_ref / self.nonzerodivparam_avetravtimeperlane)
             )
             
+            print(current_v_ref)
+            print(f"U_avetravtimeperlane: {utility_avetravtimeperlane}")
             return utility_avetravtimeperlane
 
     # discretionary and anticipatory
@@ -273,6 +291,7 @@ class LaneChangePlanner:
         # utility calculates the time gaps for each of the gaps in the lane and takes their average
         
         if len(vehicle_observations) < 2:
+            print("U_avetimegapdensityperlane: 1")
             return 1
         else:
             sorted_vehicle_observations_by_pos = sorted(vehicle_observations, key=lambda vehicle_observation:vehicle_observation[1])
@@ -291,6 +310,8 @@ class LaneChangePlanner:
 
             utility_avetimegapdensityperlane = min([current_desiredtimegap * self.scalingparam_avetimegapdensityperlane, avetimegapperlane]) / (current_desiredtimegap * self.scalingparam_avetimegapdensityperlane)
             
+
+            print(f"U_avetimegapdensityperlane: {utility_avetimegapdensityperlane}")
             return utility_avetimegapdensityperlane
 
     # mandatory
@@ -299,17 +320,19 @@ class LaneChangePlanner:
         
         utility_remainingtravtime = 0
 
-        if len(vehicle_observations) == 0 or not vehicle_observations:
+        if not vehicle_observations:
             utility_remainingtravtime = min(
-                self.time_horizon * current_v_ref - current_s, 
+                self.time_horizon * current_v_ref, 
                 target_s - current_s,
                 ) / max(current_v_ref, 0.1) / self.time_horizon
         else:
             utility_remainingtravtime = min(
-                self.time_horizon * current_v_ref - current_s, 
+                self.time_horizon * current_v_ref, 
                 target_s - current_s, 
                 max(vehicle_observations, key=lambda vehicle_observation:vehicle_observation[1])[1] - current_s
                 ) / max(current_v_ref, 0.1) / self.time_horizon
+        
+        print(f"U_remainingtravtime: {utility_remainingtravtime}")
         return utility_remainingtravtime
 
     # mandatory
@@ -322,42 +345,157 @@ class LaneChangePlanner:
         k = (lane_idx + 1)/(self.lanes_count + 1) * self.urgencyfactor_urgency
 
         utility_urgency = np.exp(-k * dist_to_exit)
+
+        print(f"U_urgency: {utility_urgency}")
         
         return utility_urgency
 
 
-    def plan_next_step(self, target_d, target_v, observation_matrix):
-        observation matrix
-        tvp_template_longitudinal + mpc_longitudinal.get.tvp
-        tvp_template = self.mpc.get_tvp_template()
+    # def plan_next_step(self, target_d, target_v, observation_matrix):
+    #     observation matrix
+    #     tvp_template_longitudinal + mpc_longitudinal.get.tvp
+    #     tvp_template = self.mpc.get_tvp_template()
 
-        for k in range(self.horizon_N + 1):
+    #     for k in range(self.horizon_N + 1):
 
-            # target distance and velocity do not change (ASSUMED)
-            tvp_template['_tvp', k, 'target_d'] = target_d
-            tvp_template['_tvp', k, 'target_v'] = target_v
+    #         # target distance and velocity do not change (ASSUMED)
+    #         tvp_template['_tvp', k, 'target_d'] = target_d
+    #         tvp_template['_tvp', k, 'target_v'] = target_v
 
-            for i in range(self.observed_vehicles_count):
-                # gives no presence (0) to the excess observed vehicles count  
-                presence = observation_matrix[i][0] if len(observation_matrix) > i else 0
+    #         for i in range(self.observed_vehicles_count):
+    #             # gives no presence (0) to the excess observed vehicles count  
+    #             presence = observation_matrix[i][0] if len(observation_matrix) > i else 0
 
-                if presence == 1:
-                    observed_x_current = observation_matrix[i][1]
-                    observed_y_current = observation_matrix[i][2]
-                    observed_vx_current = observation_matrix[i][3]
-                    observed_vy_current = observation_matrix[i][4]
+    #             if presence == 1:
+    #                 observed_x_current = observation_matrix[i][1]
+    #                 observed_y_current = observation_matrix[i][2]
+    #                 observed_vx_current = observation_matrix[i][3]
+    #                 observed_vy_current = observation_matrix[i][4]
 
-                    # POSITION PREDICTION FOR EACH CAR
+    #                 # POSITION PREDICTION FOR EACH CAR
 
-                    predicted_x = observed_x_current + observed_vx_current * (k * self.dt)
-                    predicted_y = observed_y_current + observed_vy_current * (k * self.dt)
+    #                 predicted_x = observed_x_current + observed_vx_current * (k * self.dt)
+    #                 predicted_y = observed_y_current + observed_vy_current * (k * self.dt)
 
-                    tvp_template['_tvp', k, f'obs_{i}_x'] = predicted_x
-                    tvp_template['_tvp', k, f'obs_{i}_y'] = predicted_y
+    #                 tvp_template['_tvp', k, f'obs_{i}_x'] = predicted_x
+    #                 tvp_template['_tvp', k, f'obs_{i}_y'] = predicted_y
 
-                else:
-                    # set safety ellipse really far back if car is of no presence
-                    tvp_template['_tvp', k, f'obs_{i}_x'] = -1000.0
-                    tvp_template['_tvp', k, f'obs_{i}_y'] = -1000.0
+    #             else:
+    #                 # set safety ellipse really far back if car is of no presence
+    #                 tvp_template['_tvp', k, f'obs_{i}_x'] = -1000.0
+    #                 tvp_template['_tvp', k, f'obs_{i}_y'] = -1000.0
 
-        self.current_tvp = tvp_template
+    #     self.current_tvp = tvp_template
+
+
+import numpy as np
+
+# --- To Save a Matrix (e.g., after a specific sim event) ---
+def save_scenario(obs_matrix, filename="scenario_dump.csv"):
+    # fmt='%.4f' keeps it readable; header is optional
+    np.savetxt(filename, obs_matrix, delimiter=",", fmt='%.4f')
+
+# --- To Load for Testing ---
+def load_scenario(filename="test_obs.csv"):
+    return np.loadtxt(filename, delimiter=",")
+
+import gymnasium as gym
+import highway_env
+import numpy as np
+import pygame
+
+def visualize_with_speeds(csv_path):
+    # 1. Load your CSV (Presence, x, y, vx, vy, heading)
+    try:
+        obs_matrix = np.genfromtxt(csv_path, delimiter=',')
+        if obs_matrix.ndim == 1: 
+            obs_matrix = obs_matrix[np.newaxis, :]
+    except Exception as e:
+        print(f"Error: Could not load {csv_path}. {e}")
+        return
+
+    # 2. Setup the Environment
+    config = {
+        "lanes_count": 5,
+        "vehicles_count": len(obs_matrix),
+        "observation": {"type": "Kinematics"},
+        "simulation_frequency": 15,
+        "policy_frequency": 1,
+        "screen_width": 1200,
+        "screen_height": 400
+    }
+
+    env = gym.make("highway-v0", render_mode="human", config=config)
+    env.reset()
+
+    # Get the road vehicles and the viewer
+    sim_vehicles = env.unwrapped.road.vehicles
+    
+    # Init Font for Speed Display
+    pygame.font.init()
+    font = pygame.font.SysFont("monospace", 15, bold=True)
+
+    print("Displaying CSV Scenario. Close the window to stop.")
+
+    running = True
+    while running:
+        # Check for Pygame events (like closing the window)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # Apply CSV states to Sim Vehicles
+        for i, row in enumerate(obs_matrix):
+            if i >= len(sim_vehicles): break
+            
+            presence, x, y, vx, vy, heading = row
+            
+            if presence == 1.0:
+                sim_vehicles[i].position = np.array([float(x), float(y)])
+                sim_vehicles[i].speed = np.sqrt(float(vx)**2 + float(vy)**2)
+                sim_vehicles[i].heading = float(heading)
+            else:
+                sim_vehicles[i].position = np.array([-500.0, -500.0])
+
+        # Render the frame
+        env.render()
+        
+        # DRAW OVERLAY (Speed Labels)
+        # We access the internal viewer to map sim-coordinates to screen-coordinates
+        surface = pygame.display.get_surface()
+        viewer = env.unwrapped.viewer
+
+        for i, row in enumerate(obs_matrix):
+            if row[0] == 1.0:
+                # Convert vehicle world position (x, y) to pixel position
+                pixel_pos = viewer.display()
+                
+                # Create text: "25.4 m/s"
+                speed_text = f"{row[3]:.1f} m/s"
+                label = font.render(speed_text, 1, (255, 255, 255)) # White text
+                
+                # Draw label slightly above the vehicle
+                #new = surface.pos2pix(sim_vehicles[i].position)
+                #surface.blit(label, new)
+
+        pygame.display.flip()
+
+    env.close()
+
+
+
+if __name__ == "__main__":
+
+    with open("../../configs/simenv_params.yaml", "r") as f:
+        simenv_params = yaml.safe_load(f)
+
+    planner = LaneChangePlanner(
+        simenv_params['env_params'],
+        simenv_params['vehiclemodel_params'],
+        simenv_params['sutlanechanger_mpc_params'],
+    )
+
+    # Usage in your main script
+    obs = load_scenario("trial_obs.csv")
+    target_lane, ego_observation, extracted_vehicle_observations, current_v_ref = planner.determine_desired_lane(obs, current_v_ref=25.0, current_desiredtimegap=2.0)
+    visualize_with_speeds("trial_obs.csv")
