@@ -145,7 +145,7 @@ class SUTLaneChanger_MPC:
     
     def make_step(self, current_state):
         return self.mpc.make_step(current_state)
-    
+    scaling
     def update_targets_and_obstacles_in_sut_mpc(self, target_d, target_v, observation_matrix):
         tvp_template = self.mpc.get_tvp_template()
 

@@ -7,7 +7,7 @@ env_params:
   merge_amplitude: 3.25
 
   # Vehicle configuration
-  vehicles_count: 0          # Total ambient cars
+  vehicles_count: 20          # Total ambient cars
   controlled_vehicles: &controlled_vehicles 11      # 1 SUT + 6 Adversaries
   vehicle_density: 0.0
   initial_lane_id: 0
@@ -27,7 +27,7 @@ env_params:
   action:
     type: "MultiAgentAction"
     action_config:
-      type: "ContinuousAction"  # Allows "Squeezing"
+      type: "ContinuousAction"  # Continuous action "Squeezing"
       longitudinal: true
       lateral: true
 
@@ -48,7 +48,7 @@ vehiclemodel_params:  # not normalized
   min_long_accel_ms2: -4.0        # in m/s^2 (VOLVO STANDARD)
   max_long_vel_ms: 30
 
-  max_yaw_rad: 0.087
+  max_yaw_rad: 0.087              # approx. 5 degrees in rad
   min_yaw_rad: -0.087
 
   target_heading_angle: 0
@@ -68,11 +68,11 @@ sutlanechanger_mpc_params:
 
   Q_s: 10.0
   Q_v: 5.0
-  R_a: 1.0
+  R_a: 1.0            # higher for higher penalty in jerkiness
 
   Q_d: 20.0
   Q_heading: 50.0
-  R_steer: 100.0
+  R_steer: 100.0      # higher for higher penalty in jerkiness
   
   
   utilweight_avetravtimeperlane: 1

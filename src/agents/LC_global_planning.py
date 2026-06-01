@@ -14,7 +14,7 @@ class LaneChangePlanner:
 
         self.target_s = sum(self.ends_m) - self.ends_m[-1]
 
-        # ==== LC VEHICLE CONTROLLER PARAMS ====
+        # ==== LC CONTROLLER PARAMS ====
 
         self.horizon_N = sutlanechanger_mpc_params['horizon_N']
         self.dt = sutlanechanger_mpc_params['dt']
@@ -214,7 +214,7 @@ class LaneChangePlanner:
 
                 utility_avetravtimeperlane = self._calculate_utility_avetravtimeperlane(lane_vehicle_observations, current_v_ref)
                 utility_avetimegapdensityperlane = self._calculate_utility_avetimegapdensityperlane(lane_vehicle_observations, current_desiredtimegap)
-                utility_remainingtravtime = self._calculate_utility_remainingtravtime(lane_vehicle_observations, ego_s, current_v_ref, self.target_s)
+                utility_remainingtravtime = 0 # self._calculate_utility_remainingtravtime(lane_vehicle_observations, ego_s, current_v_ref, self.target_s)
                 utility_urgency = self._calculate_utility_urgency(ego_s, self.target_s, global_lane_idx)
 
                 total_utility = (

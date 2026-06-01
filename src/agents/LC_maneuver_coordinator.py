@@ -9,7 +9,7 @@ class Maneuver_Coordinator:
         
         self.target_lane_idx = None
         
-        self.state = "FOLLOWING" # FOLLOWING, ALIGNING, INTRUDING
+        self.state = "FOLLOWING" # FOLLOWING, ALIGNING, INTRUDING, ABORTING
 
 
     def run_step(self, observation):

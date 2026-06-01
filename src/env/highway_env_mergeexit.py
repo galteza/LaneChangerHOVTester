@@ -1,7 +1,8 @@
 import numpy as np
 import time
 import yaml
-import os
+
+from pathlib import Path
 
 from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.road import Road, RoadNetwork
@@ -13,8 +14,23 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     """
     A customized environment with an on-ramp and and exit ramp.
 
-    The ego-vehicle will be driving on the merge and will be exiting through to the exit ramp by traversing the highway.
-    The ego vehicle will be using the created SUT lane changer MPC created.
+    The ego vehicle starts driving from the merge ramp and traverses the highway to exit through the
+     exit ramp. The ego vehicle will be controlled not by the agent of the environment, rather by a
+      separate white-box MPC-based controller. The agent of this environment will be the adversarial platoon of vehicles,
+        trying to spike the risk metrics (to crash) of this ego vehicle.
+    
+        The platoon is to be composed of 2n vehicles for a highway environment of n lanes. Each vehicle has the following
+        inputs
+
+    ## Action Space
+    The agent takes a 
+
+    ## Rewards
+
+    The reward consists of two parts:
+
+    The goal of the environment is to have the ego lane-changer (LC) go from the on-ramp to the exit ramp.
+    A final reward of +10 is given to the agent 
 
     """
 
@@ -22,37 +38,16 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     def default_config(cls) -> dict:
         config = super().default_config()
 
-        config_path = os.path.join(os.path.dirname(__file__), "simenv_params.yaml")
+        current_dir = Path(__file__).resolve().parent
+        params_path = current_dir.parent.parent / "configs" / "params_main.yaml"
 
-        config.update({
-            # === STARTER CONFIGS ===
+        with open(params_path, "r") as f:
+            params = yaml.safe_load(f)
 
-            "observation": {
-                "type" : "Kinematics"
-            },
-            "action" : {
-                "type" : "DiscreteMetaAction",
-            },
-            "duration" : 40,
-            "initial_spacing" : 2,
-            "simulation_frequency" : 15,
-            "policy_frequency" : 1,
+        config.update(params)
 
-            # === ENVIRONMENT ===
-
-            "lanes_count" : 5,
-            "lane_width_m": 4.0,
-            "ends_m": [150, 80, 80, 300, 80, 80, 150], # Establishing lengths of each section
-            "merge_amplitude": 3.25,
-
-            # === CAMERA SETTINGS ===
-
-            "scaling": 3,                # Default is ~5.5. Lower number = further zoomed out!
-            "screen_width": 1200,          # Makes the Pygame window much wider (Default is 600)
-            "screen_height": 400,          # Makes the Pygame window taller
-            "centering_position": [0.2, 0.5], # Pushes the car to the left 20% of the screen so you can see more of the road ahead
-            })
         return config
+
 
     def _make_road(self) -> None:
 
@@ -77,7 +72,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         c, s, n = LineType.CONTINUOUS_LINE, LineType.STRIPED, LineType.NONE
 
-        # === HIGHWAY LANES
+        # === HIGHWAY LANES ===
 
         # Initializing the line types for each lane (one per differing section)
         line_type = [[c, s]] + [[n, s]] * (lanes_count-2) + [[n, c]]
@@ -136,55 +131,55 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             )
 
 
-        net.add_lane(
-            "d", "e",
-            StraightLane(
-                [sum(ends_m[:4]), -lane_width_m],
-                [sum(ends_m[:5]), -lane_width_m],
-                line_types=[c,n],
-                forbidden=True,
-            )
-        )
-
         # MERGING LANE (modeling the curve using sine wave)
         amplitude = self.config["merge_amplitude"]
 
-        merging_jk = StraightLane( # Before
-            [0, amplitude*2 + lane_width_m*(lanes_count)],
-            [ends_m[0], amplitude*2 + lane_width_m*(lanes_count)],
+        self.mergeramp_startlat = amplitude*2 + lane_width_m*lanes_count
+
+        self.merging_jk = StraightLane( # Before
+            [0, self.mergeramp_startlat],
+            [ends_m[0], self.mergeramp_startlat],
             line_types=[c,c],
             forbidden=True
         )
-        merging_kb = SineLane( # Converging
-            merging_jk.position(ends_m[0], -amplitude),
-            merging_jk.position(sum(ends_m[:2]), -amplitude),
+        self.merging_kb = SineLane( # Converging
+            self.merging_jk.position(ends_m[0], -amplitude),
+            self.merging_jk.position(sum(ends_m[:2]), -amplitude),
             amplitude, # amplitude
             2 * np.pi / (2 * ends_m[1]), # pulsation
             np.pi / 2, # phase
             line_types=[c, c],
             forbidden=True,
         )
-        merging_bc = StraightLane( # Merge ramp connection
-            merging_kb.position(ends_m[1], 0),
-            merging_kb.position(ends_m[1], 0) + [ends_m[2], 0],
+        self.merging_bc = StraightLane( # Merge ramp connection
+            self.merging_kb.position(ends_m[1], 0),
+            self.merging_kb.position(ends_m[1], 0) + [ends_m[2], 0],
             line_types=[n,c],
             forbidden=True,
         )
 
 
-        net.add_lane("j", "k", merging_jk)
-        net.add_lane("k", "b", merging_kb)
-        net.add_lane("b", "c", merging_bc)
+        net.add_lane("j", "k", self.merging_jk)
+        net.add_lane("k", "b", self.merging_kb)
+        net.add_lane("b", "c", self.merging_bc)
 
         # EXIT LANE (modeling the curve using sine wave)
-        exit_ref = StraightLane(
-            [sum(ends_m[:4]), -lane_width_m - amplitude],
-            [sum(ends_m[:5]), -lane_width_m - amplitude],
+
+        self.merging_de = StraightLane(
+            [sum(ends_m[:4]), -lane_width_m],
+            [sum(ends_m[:5]), -lane_width_m],
+            line_types=[c,n],
+            forbidden=True,
         )
 
-        merging_el = SineLane(
-            exit_ref.position(ends_m[4], 0),
-            exit_ref.position(sum(ends_m[4:6]), 0),
+        # exit_ref = StraightLane(
+        #     [sum(ends_m[:4]), -lane_width_m - amplitude],
+        #     [sum(ends_m[:5]), -lane_width_m - amplitude],
+        # )
+
+        self.merging_el = SineLane(
+            self.merging_de.position(ends_m[4], 0) + [0, -amplitude],
+            self.merging_de.position(sum(ends_m[4:6]), 0) + [0, -amplitude],
             amplitude,
             2 * np.pi / (2 * ends_m[5]),
             np.pi / 2,
@@ -192,21 +187,64 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             forbidden=True,
         )
 
-        merging_lm = StraightLane(
-            merging_el.position(ends_m[5], 0),
-            merging_el.position(ends_m[5], 0) + [ends_m[6], 0],
+        self.merging_lm = StraightLane(
+            self.merging_el.position(ends_m[5], 0),
+            self.merging_el.position(ends_m[5], 0) + [ends_m[6], 0],
             line_types=[c, c],
             forbidden=True,
         )
 
-        net.add_lane("e", "l", merging_el)
-        net.add_lane("l", "m", merging_lm)
+        net.add_lane("d", "e", self.merging_de)
+        net.add_lane("e", "l", self.merging_el)
+        net.add_lane("l", "m", self.merging_lm)
 
         self.road = Road(
             network = net,
             np_random = self.np_random,
             record_history = self.config["show_trajectories"],
         )
+
+    def find_borders(self, target_long_pos: float):
+        
+        lanes_count = self.config['env_params']['lanes_count']
+        lane_width = self.config['env_params']['lane_width_m']
+
+        sections = self.config['env_params']['ends_m']
+        # ex. [150, 80, 80, 300, 80, 80, 150]
+
+        target_sec_idx = 0
+        total = target_long_pos
+        for sec_idx in range(len(sections)):
+            total -= sections[sec_idx]
+            if total <= 0:
+                break
+            target_sec_idx += 1
+        
+
+        match target_sec_idx:
+            case 0:
+                target_lat_upper = 
+                target_lat_lower = 
+            case 1:
+                target_lat_upper = 
+                target_lat_lower =
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+            
+        if target_sec_idx <= 2:
+
+        elif target_sec_idx == 3:
+            target_lat_upper = 0
+            target_lat_lower = lane_width * lanes_count
+        elif target_sec_idx >= 4:
+
+
+
+        target_lat_upper = 
+        return target_lat_upper, target_lat_lower
 
     def _make_vehicles(self) -> None:
         self.controlled_vehicles = []
@@ -242,7 +280,6 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
     def _make_stock_vehicles(self) -> None:
 
-        
         self.controlled_vehicles = []
 
         ego_lane = self.road.network.get_lane(("j", "k", 0))
@@ -263,21 +300,31 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         self.controlled_vehicles.append(ego)
         self.road.vehicles.append(ego)
 
+
+        for _ in range(10):
+            vehicle = IDMVehicle.create_random(
+                self.road,
+                speed = np.random.uniform(20,30),
+                spacing = 0.5,
+            )
+            self.road.vehicles.append(vehicle)
+
         # ego.plan_route_to("l")
 
-        for lane_idx in range(5):
-            highway_lane = self.road.network.get_lane(("a", "b", lane_idx))
-            for car_idx in range(2):
-                longitudinal_pos_m = 20 - (car_idx * 20)
+        # for lane_idx in range(5):
+        #     highway_lane = self.road.network.get_lane(("a", "b", lane_idx))
+        #     for car_idx in range(2):
+        #         longitudinal_pos_m = 20 - (car_idx * 20)
 
-                vehicle = self.action_type.vehicle_class(
-                    self.road,
-                    highway_lane.position(longitudinal_pos_m, 0),
-                    speed = 0
-                )
-                self.road.vehicles.append(vehicle)
+        #         vehicle = self.action_type.vehicle_class(
+        #             self.road,
+        #             highway_lane.position(longitudinal_pos_m, 0),
+        #             speed = 0
+        #         )
+        #         self.road.vehicles.append(vehicle)
 
         self.vehicle = self.controlled_vehicles[0]
+
 
     def _reset(self) -> None:
         self._make_road()
@@ -308,7 +355,6 @@ for _ in range(200):
     # If your gym version is older, you might only get 4 return values instead of 5
     obs, reward, done, truncated, info = env.step(1)
 
-    # This is the magic command that physically draws the Pygame window!
     env.render()
 
     time.sleep(0.05) # <--- Add this to slow down the frame rate

@@ -14,6 +14,7 @@ dependencies = [
     "pandas>=3.0.1",
     "pettingzoo>=1.25.0",
     "pyyaml>=6.0.3",
+    "stable-baselines3>=2.8.0",
     "tianshou>=2.0.0",
     "torch>=2.10.0",
     "tqdm>=4.67.3",

@@ -1,8 +1,12 @@
+# === LIBRARIES ===
 import numpy as np
 import time
-
 from matplotlib import pyplot as plt
 import yaml
+
+import stable_baselines3 import SAC
+
+# === CUSTOM FILES ===
 
 from src.agents.decoupled_lanechanger_mpc import DecoupledLaneChanger_MPC
 from src.env.highway_env_mergeexit import MergeExitLaneHighway_Environment
@@ -11,73 +15,12 @@ from src.agents.mpc_lateral import MPC_Lateral
 from src.agents.mpc_longitudinal import MPC_Longitudinal
 from src.agents.maneuver_coordinator import Maneuver_Coordinator
 
-# === 0. PREPARING HELPER FUNCTIONS
-
-def lateral_radar_sweep(env, target_longitudinal_s, current_lateral_position):
-    """
-    Sweeping the road network at given longitudinal position and returning the boundaries
-    of the block that the car is currently on.
-    """
-
-    active_lanes = []
-    all_lanes = env.unwrapped.road.network.lanes_list()
-
-    for lane in all_lanes:
-        target_longitudinal_s_converted, _ = lane.local_coordinates(np.array([target_longitudinal_s, 0])) # Automatically converts to local coordinates for that lane
-        error_buffer_m = 1
-        if -error_buffer_m + 0 <= target_longitudinal_s_converted <= lane.length + error_buffer_m:
-            _, lane_center_y = lane.position(target_longitudinal_s_converted, 0)
-            half_width = lane.width / 2.0
-            
-            active_lanes.append({
-                'left': lane_center_y - half_width,
-                'right': lane_center_y + half_width
-            })
-
-    if not active_lanes:
-        return current_lateral_position - 2, current_lateral_position + 2
-    
-    # Sort lanes
-
-    active_lanes = sorted(active_lanes, key=lambda x: x['left'])
-
-    # Find lane in closest match to the one car is on
-
-    closest_lane_idx = 0
-    min_dist = float('inf')
-
-    for i, lane in enumerate(active_lanes):
-        lane_center = (lane['left'] + lane['right']) / 2
-        dist = abs(current_lateral_position - lane_center)
-        if dist < min_dist:
-            min_dist = dist
-            closest_lane_idx = 1
-
-    # Expand boundaries from car's current lane
-
-    d_min = active_lanes[closest_lane_idx]['left']
-    d_max = active_lanes[closest_lane_idx]['right']
-
-    gap_tolerance = 0.5
-
-    for i in range(closest_lane_idx-1, -1, -1):
-        if abs(active_lanes[i]['right'] - d_min) <= gap_tolerance:
-            d_min = active_lanes[i]['right']
-        else:
-            break
-    
-    for i in range(closest_lane_idx+1, len(active_lanes)):
-        if abs(active_lanes[i]['left'] - d_max) <= gap_tolerance:
-            d_max = active_lanes[i]['right']
-        else:
-            break
-    
-    return d_min, d_max
-
 # === 0. PREPARING CONFIGS & ARRAYS FOR GRAPH DISPLAY ===
 
-with open("configs/simenv_params.yaml", "r") as f:
-    simenv_params = yaml.safe_load(f)
+params_path = "configs/params_main.yaml"
+
+with open(params_path, "r") as f:
+    params = yaml.safe_load(f)
 
 history_time = []
 history_actual_d = []
@@ -85,38 +28,48 @@ history_actual_s = []
 
 t = 0.0
 
-
 # === 1. INITIALIZE CUSTOM ENVIRONMENT ===
+
 highway_environment = MergeExitLaneHighway_Environment()
-highway_environment.configure(simenv_params['env_params'])
+highway_environment.configure(params['env_params'])
 highway_environment.render_mode = "human"
 
 mpc_lateral = MPC_Lateral(
-    simenv_params['env_params'],
-    simenv_params['vehiclemodel_params'],
-    simenv_params['sutlanechanger_mpc_params'],
+    params['env_params'],
+    params['vehiclemodel_params'],
+    params['sutlanechanger_mpc_params'],
 )
 
 mpc_longitudinal = MPC_Longitudinal(
-    simenv_params['env_params'],
-    simenv_params['vehiclemodel_params'],
-    simenv_params['sutlanechanger_mpc_params'],
+    params['env_params'],
+    params['vehiclemodel_params'],
+    params['sutlanechanger_mpc_params'],
 )
 
-global_planner = LaneChangePlanner(
-    simenv_params['env_params'],
-    simenv_params['vehiclemodel_params'],
-    simenv_params['sutlanechanger_mpc_params'],
+planner = LaneChangePlanner(
+    params['env_params'],
+    params['vehiclemodel_params'],
+    params['sutlanechanger_mpc_params'],
+)
+
+mapper = MapService(
+    highway_environment
 )
 
 maneuver_coordinator = Maneuver_Coordinator(
     mpc_lateral,
     mpc_longitudinal,
-    global_planner,
-    simenv_params['env_params'],
-    simenv_params['vehiclemodel_params'],
-    simenv_params['sutlanechanger_mpc_params'],
+    planner,
+    params['env_params'],
+    params['vehiclemodel_params'],
+    params['sutlanechanger_mpc_params'],
 )
+
+model = SAC("MlpPolicy", highway_environment, verbose=1)
+model.learn(total_timesteps=10000, log_interval=4)
+model.save("sac_highwayenv")
+
+model = SAC.load("sac_highwayenv")
 
 obs, info = highway_environment.reset()
 
@@ -156,7 +109,78 @@ try:
     while not (done or truncated):
 
         multi_agent_actions = []
+
+        """
+        Obs. matrix is organized as follows:
+
+        Vehicle             x       y       vx      vy
+        ego-vehicle (0)     5.0     4.0     15.0    0
+        vehicle 1           -10.0   4.0     12.0    0
+        vehicle 2           13.0    8.0     13.5    0
+        ...
+        vehicle V           22.2    10.5    18.0    0.5
+
+        """
         
+
+        # Looping for the ego vehicle
+
+        ego_obsermat = obs[0]
+        ego_selfobser = ego_obsermat[0]
+        ego_obstacmat = ego_obsermat[1:]
+
+        global_planner.determine_desired_lane(obs, v_ref, desired_time_gap)
+        # check the lane utility (average speed in each lane, average time gap in each lane, average travellable distance till end of the road, how far away lane is from target)
+        
+        # check each of the available gaps in target lane is good
+        # take the longitudinal position of the followers and find the one that limits the range
+        # take the longitudinal position of the leaders and find the one that limits the range
+        # limits define gap a
+        # take the maximum reachable position and minimum reachable position of the ego --> gap b
+        # take the intersection of gap a and gap b 
+
+
+        # LONGITUDINAL MOVEMENT (necessary)
+        long_x0templ = mpc_longitudinal.x0
+        long_x0templ = mpc_longitudinal.u0
+        long_tvptempl = mpc_longitudinal.get_tvp_template()
+
+
+        # CONDITIONAL LATERAL MOVEMENT
+        if maneuver_coordinator.state == "FOLLOWING":
+            # follow leading vehicle safely as usual
+
+            # calculate the safe distance and velocity to follow below 
+            long_x0templ['s'] = velocity 
+            long_x0templ['v'] = velocity of leading vehicle
+
+            if 5 time instances have passed and still exists,
+                maneuver_coordinator.state = "ALIGNING"
+            
+        elif maneuver_coordinator.state == "ALIGNING":
+            # means that the vehicle has overridden the following of the leading vehicle and is currently or about to
+            # be positioning itself within the peri region longitudinal range in the prev lane
+
+            long_x0templ = mpc_lateral.mpc.x0
+            lat_x0templ = mpc_lateral.mpc.x0
+
+
+            lat_x0templ['d'] = 
+            lat_x0templ['psi'] = 
+
+            lat_u0 = mpc_lateral.make_step(lat_x0templ)
+            if suddenly gap is gone
+                maneuver_coordinator.state = "ABORTING"
+        elif maneuver_coordinator.state == "INTRUDING":
+            # means that the vehicle has reached within the peri region range and can now begin lateral movement
+            if suddenly
+        elif maneuver_coordinator.state == "ABORTING":
+             take previous lane and realign there, try to keep safe distance 
+
+
+        cur_agent_s
+
+
         for i, agent_obs_matrix in enumerate(obs):
             agent_self_state = agent_obs_matrix[0]
             current_agent_s = agent_self_state[1]       # longitudinal distance
@@ -180,7 +204,7 @@ try:
 
                 sutlanechanger_mpc.update_targets_and_obstacles_in_sut_mpc(
                     target_d=-4.0,
-                    target_v=simenv_params['sutlanechanger_mpc_params']['target_v'],
+                    target_v=params['sutlanechanger_mpc_params']['target_v'],
                     observation_matrix=obstacle_matrix
                 )
 
@@ -201,7 +225,7 @@ try:
             # ADVERSARIAL PLATOON OF CRUISERS (Staying on highway)
 
             else:
-                x0_extracted_structure = sutlanechanger_mpc.mpc.x0 # change this later
+                # use the pure pursuit controller provided by highway_env
                 
                 x0_extracted_structure['s'] = current_agent_s
                 x0_extracted_structure['d'] = current_agent_d
@@ -221,12 +245,14 @@ try:
                 accel_ms2 = float(u0_extracted_structure['accel'])
 
 
-            normalized_accel = accel_ms2 / simenv_params['vehiclemodel_params']['max_long_accel_ms2']
-            normalized_steer = steering_rad / simenv_params['vehiclemodel_params']['max_steer_rad']
+            normalized_accel = accel_ms2 / params['vehiclemodel_params']['max_long_accel_ms2']
+            normalized_steer = steering_rad / params['vehiclemodel_params']['max_steer_rad']
 
             agent_action = np.array([normalized_accel, normalized_steer], dtype=np.float32)
             multi_agent_actions.append(agent_action)
         
+        # step
+
         obs, reward, done, truncated, info = highway_environment.step(tuple(multi_agent_actions)) # converting into tuple
 
         highway_environment.render()

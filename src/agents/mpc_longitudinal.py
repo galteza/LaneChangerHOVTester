@@ -2,7 +2,7 @@ import do_mpc
 import casadi as ca
 
 class MPC_Longitudinal:
-    def __init__(self, env_params, vehiclemodel_params, sutlanechanger_mpc_params):
+    def __init__(self, vehiclemodel_params, sutlanechanger_mpc_params):
         self.max_long_vel_ms = vehiclemodel_params['max_long_vel_ms']
         self.max_long_accel_ms2 = vehiclemodel_params['max_long_accel_ms2']
         self.min_long_accel_ms2 = vehiclemodel_params['min_long_accel_ms2']
@@ -20,25 +20,30 @@ class MPC_Longitudinal:
         self._setup_mpc()
 
     def _setup_mpc(self):
-    
+        
+        ### SETUP MODEL
+
         self.model = do_mpc.model.Model('continuous')
         
-        # --- 1. States & Inputs ---
+        # === 1. States & Inputs ===
         s = self.model.set_variable(var_type='_x', var_name='s')
         v = self.model.set_variable(var_type='_x', var_name='v')
 
         a = self.model.set_variable(var_type='_u', var_name='a')
 
-        # --- 2. Time-Varying Parameters (The Ghost Car & Traffic) ---
-        s_ref = model.set_variable(var_type='_tvp', var_name='s_ref')
-        v_ref = model.set_variable(var_type='_tvp', var_name='v_ref') # try to keep this reference velocity
-        s_min = model.set_variable(var_type='_tvp', var_name='s_min') # for the minimum of the corridor
-        s_max = model.set_variable(var_type='_tvp', var_name='s_max') # for the maximum of the corridor
+        # === 2. Time-Varying Parameters (The Ghost Car & Traffic) ===
+        s_ref = self.model.set_variable(var_type='_tvp', var_name='s_ref') # calculated to be the safest nearest dist it can be to the leader
+        v_ref = self.model.set_variable(var_type='_tvp', var_name='v_ref') # appropriate velocity according to the leader
 
-        # --- 3. Equations of Motion ---
+        s_min = self.model.set_variable(var_type='_tvp', var_name='s_min') # for the minimum of the corridor, hard constraint
+        s_max = self.model.set_variable(var_type='_tvp', var_name='s_max') # for the maximum of the corridor, hard constraint
+
+        # === 3. Equations of Motion ===
         self.model.set_rhs('s', v)
         self.model.set_rhs('v', a)
         self.model.setup()
+
+        ### SETUP CONTROLLER
 
         self.mpc = do_mpc.controller.MPC(self.model)
 
@@ -49,13 +54,14 @@ class MPC_Longitudinal:
         }
         self.mpc.set_param(**setup_mpc)
 
-        # --- 4. Cost Function (Track the Ghost Car) ---
+        # === 4. Cost Function (Track the Ghost Car) ===
+
         # Penalize deviation from the reference trajectory and jerk (changing acceleration)
         lterm = self.Q_s * (s - s_ref)**2 + self.Q_v * (v - v_ref)**2
         self.mpc.set_objective(mterm=lterm, lterm=lterm)
         self.mpc.set_rterm(a=self.R_a) # Smooth gas/brake pedal
 
-        # --- 5. Constraints (Safety Corridors & Physics) ---
+        # === 5. Constraints (Safety Corridors & Physics) ===
         self.mpc.bounds['lower', '_u', 'a'] = self.min_long_accel_ms2 # Max braking
         self.mpc.bounds['upper', '_u', 'a'] = self.max_long_accel_ms2 # Max acceleration
         self.mpc.bounds['lower', '_x', 'v'] = 0.0  # No reversing on the highway!

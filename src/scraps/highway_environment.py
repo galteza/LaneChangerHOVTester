@@ -1,6 +1,7 @@
 import gymnasium as gym
 import highway_env
 import yaml
+import time
 
 from highway_env.vehicle.behavior import IDMVehicle
 
@@ -65,7 +66,7 @@ env.reset()
 for _ in range(200):
     # Action '1' is the IDLE action (tells the car to just cruise forward)
     # If your gym version is older, you might only get 4 return values instead of 5
-    obs, reward, done, truncated, info = env.step(1)
+    obs, reward, done, truncated, info = env.step((1,))
 
     # This is the magic command that physically draws the Pygame window!
     env.render()
