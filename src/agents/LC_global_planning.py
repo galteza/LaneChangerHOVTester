@@ -188,19 +188,22 @@ class LaneChangePlanner:
 
     # ==== HELPER FUNCTIONS ====
 
-    def _calculate_neighboring_lane_utilities(self, observation_matrix, current_v_ref, current_desiredtimegap):
+    def _calculate_neighboring_lane_utilities(self, observation_matrix, current_v_ref, current_desiredtimegap, lanes_info):
 
         lane_utilities = []
 
+        ego_s = observation_matrix[0][1]
+        ego_d = observation_matrix[0][2]
+
         ego_vehicle_observation, extracted_vehicle_observations = self._separate_vehicle_observations(observation_matrix)
+
+        narrowed_lane_ends = self._find_lane_ends(ego_d, lanes_info)
 
         print(extracted_vehicle_observations)
 
         same_lane_vehicle_observations = extracted_vehicle_observations[1]
         next_lane_vehicle_observations = extracted_vehicle_observations[0]
         prev_lane_vehicle_observations = extracted_vehicle_observations[2]
-
-        ego_s = observation_matrix[0][1]
 
         for lane_idx, lane_vehicle_observations in enumerate([next_lane_vehicle_observations,
                                             same_lane_vehicle_observations,
@@ -214,7 +217,7 @@ class LaneChangePlanner:
 
                 utility_avetravtimeperlane = self._calculate_utility_avetravtimeperlane(lane_vehicle_observations, current_v_ref)
                 utility_avetimegapdensityperlane = self._calculate_utility_avetimegapdensityperlane(lane_vehicle_observations, current_desiredtimegap)
-                utility_remainingtravtime = 0 # self._calculate_utility_remainingtravtime(lane_vehicle_observations, ego_s, current_v_ref, self.target_s)
+                utility_remainingtravtime = self._calculate_utility_remainingtravtime(ego_s, narrowed_lane_ends[lane_idx][2], current_v_ref)
                 utility_urgency = self._calculate_utility_urgency(ego_s, self.target_s, global_lane_idx)
 
                 total_utility = (
@@ -260,6 +263,27 @@ class LaneChangePlanner:
         ego_vehicle_observation = observation_matrix[0]
         
         return ego_vehicle_observation, extracted_vehicle_observations
+    
+    def _find_lane_ends(self, ego_d, lanes_info):
+
+        ego_lane_idx = int(ego_d // self.lane_width_m)
+
+        for i in range(len(lanes_info)):
+            target_lane_idx = int(lanes_info[i][0] // self.lane_width_m)
+            if target_lane_idx == ego_lane_idx: 
+                ego_lane_info = lanes_info[i] 
+                if i == 0:
+                    next_lane_info = [None, None, None]
+                    prev_lane_info = lanes_info[i+1]
+                elif i == len(lanes_info) - 1:
+                    next_lane_info = lanes_info[i-1]
+                    prev_lane_info = [None, None, None]
+                else:
+                    next_lane_info = lanes_info[i-1]
+                    prev_lane_info = lanes_info[i+1]
+        
+        return [next_lane_info, ego_lane_info, prev_lane_info]
+
 
     # ==== CALCULATING NORMALIZED UTILITY VALUES PER LANE ====
 
@@ -304,7 +328,7 @@ class LaneChangePlanner:
                 lead_s = sorted_vehicle_observations_by_pos[i+1][1]
 
                 
-                time_gaps.append(min([current_desiredtimegap * self.scalingparam_avetimegapdensityperlane, (lead_s - follower_s) / max(follower_v, 0.1)]))
+                time_gaps.append((lead_s - follower_s) / max(follower_v, 0.1))
             
             avetimegapperlane = sum(time_gaps) / len(time_gaps)
 
@@ -315,9 +339,12 @@ class LaneChangePlanner:
             return utility_avetimegapdensityperlane
 
     # mandatory
-    def _calculate_utility_remainingtravtime(self, vehicle_observations, current_s, current_v_ref, target_s):
+    def _calculate_utility_remainingtravtime(self, current_s, end_s, current_v_ref):
         # utility calculates how much time is left travellable
+        # vehicle_observations, current_s, current_v_ref, target_s
         
+        """
+
         utility_remainingtravtime = 0
 
         if not vehicle_observations:
@@ -333,6 +360,13 @@ class LaneChangePlanner:
                 ) / max(current_v_ref, 0.1) / self.time_horizon
         
         print(f"U_remainingtravtime: {utility_remainingtravtime}")
+        """
+
+        utility_remainingtravtime = min(
+            self.time_horizon * current_v_ref,
+            end_s - current_s
+        ) / current_v_ref
+
         return utility_remainingtravtime
 
     # mandatory

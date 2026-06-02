@@ -1,6 +1,8 @@
 import numpy as np
 import time
 import yaml
+import gymnasium as gym
+import spaces
 
 from pathlib import Path
 
@@ -66,9 +68,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         """
 
-        lane_width_m = self.config["lane_width_m"]
-        lanes_count = self.config["lanes_count"]
-        ends_m = self.config["ends_m"] # Before, converging, merge, mid, exit, diverging, after
+        lane_width_m = self.config["env_params"]["lane_width_m"]
+        lanes_count = self.config["env_params"]["lanes_count"]
+        ends_m = self.config["env_params"]["ends_m"] # Before, converging, merge, mid, exit, diverging, after
 
         c, s, n = LineType.CONTINUOUS_LINE, LineType.STRIPED, LineType.NONE
 
@@ -132,7 +134,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
 
         # MERGING LANE (modeling the curve using sine wave)
-        amplitude = self.config["merge_amplitude"]
+        amplitude = self.config["env_params"]["merge_amplitude"]
 
         self.mergeramp_startlat = amplitude*2 + lane_width_m*lanes_count
 
@@ -204,6 +206,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             record_history = self.config["show_trajectories"],
         )
 
+    """
+
     def find_borders(self, target_long_pos: float):
         
         lanes_count = self.config['env_params']['lanes_count']
@@ -242,9 +246,25 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         elif target_sec_idx >= 4:
 
 
-
         target_lat_upper = 
         return target_lat_upper, target_lat_lower
+    
+        
+    """
+        
+    def extract_lane_info_at_current(self, target_s):
+        """
+        Extracts the availability of a lane at current s value.
+        Each lane is listed in the array and is represented by [d, start of lane segment, end of lane segment]
+        """
+        sections = self.config['env_params']['ends_m']
+
+        highway_lane_start = 0
+        highway_lane_end = sum(sections)
+        merge_lane_end = sum(sections[:3])
+        exit_lane_start = sum(sections[:4])
+
+        return 
 
     def _make_vehicles(self) -> None:
         self.controlled_vehicles = []
@@ -340,10 +360,52 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
     def _is_truncated(self) -> bool:
         """Tells the engine to stop if the time limit is reached."""
-        return self.time >= self.config["duration"]
+        return self.time >= self.config["env_params"]["duration"]
+    
+    def step(self, action):
+        self._simulate(action)
+
+        reward = self._reward(action)
+
+        return obs, reward, terminated, truncated, info
 
 
+class FlattenWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
 
+        self.adv_agents = self.env.config['env_params']['vehicles_count']
+
+        old_shape = self.observation_space.shape
+        flat_dim = np.prod(old_shape)
+
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(flat_dim,),
+            dtype=np.float32
+        )
+
+        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(self.adv_agents * 2,), dtype=np.float32)
+
+    def observation(self, obs):
+        return obs.flatten().astype(np.float32)
+    
+    def reset(self, **kwargs):
+        obs, info = self.reset(**kwargs)
+        return self.observation(obs), info
+    
+    def step(self, action):
+        split_actions = np.reshape(action, (self.adv_agents, 2))
+
+        _obs, reward, terminated, truncated, info = self.step(split_actions)
+
+        if isinstance(reward, (list, tuple, np.ndarray)):
+            collective_reward = float(np.mean(reward))
+        else:
+            collective_reward = float(reward)
+        
+        return self.observation(_obs), collective_reward, terminated, truncated, info
 
 env = MergeExitLaneHighway_Environment()
 env.render_mode = "human" # Tells Gymnasium to prepare a visual window
@@ -357,7 +419,7 @@ for _ in range(200):
 
     env.render()
 
-    time.sleep(0.05) # <--- Add this to slow down the frame rate
+    time.sleep(0.2) # <--- Add this to slow down the frame rate
 
     # If the car crashes or finishes the route, reset the map
     if done or truncated:
