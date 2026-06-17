@@ -8,11 +8,9 @@ from src.env.highway_env_mergeexit import MergeExitLaneHighway_Environment, Flat
 
 # Create highway environment
 
-base_env = MergeExitLaneHighway_Environment()
+base_env = MergeExitLaneHighway_Environment(render_mode="human")
 
 env = FlattenWrapper(base_env) # takes the base_env, clones it to make a version with a flattened observation space
-
-env.render_mode = "human"
 
 # Import SAC from SB3
 

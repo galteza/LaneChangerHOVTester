@@ -1,6 +1,6 @@
 env_params:
   # Merge geometry
-  env_id: "highway-v0"
+  env_id: "merge_exit_highway"
   lanes_count: 5
   lane_width_m: 4
   ends_m: [150, 80, 80, 300, 80, 80, 150] # Establishing lengths of each section
@@ -8,21 +8,22 @@ env_params:
 
   # Vehicle configuration
   vehicles_count: 20          # Total ambient cars
-  controlled_vehicles: &controlled_vehicles 11      # 1 SUT + 6 Adversaries
+  controlled_vehicles: 10      # 1 SUT + 10 Adversaries
   vehicle_density: 0.0
   initial_lane_id: 0
   initial_spacing: 2
-
-  # Simulation configuration
-  duration: 60                # Seconds per episode
-  simulation_frequency: 10
-  policy_frequency: 10        # How often MPC is called
 
   # Camera setings
   scaling: 3
   screen_width: 1200
   screen_height: 400
   centering_position: [0.2, 0.5]
+
+  # Simulation configuration
+  duration: 10000                # Seconds per episode
+  simulation_frequency: 10
+  policy_frequency: 10        # How often MPC is called
+
 
   action:
     type: "MultiAgentAction"

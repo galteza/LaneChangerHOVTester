@@ -39,7 +39,6 @@ import torch.optim as optim
 import tyro
 from torch.utils.tensorboard import SummaryWriter
 
-from cleanrl_utils.buffers import ReplayBuffer
 
 
 @dataclass
@@ -397,6 +396,7 @@ class Actor(nn.Module):
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         
         return action, log_prob, mean
+    
 
 
 if __name__ == "__main__":
