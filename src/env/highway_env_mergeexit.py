@@ -1,12 +1,9 @@
 import numpy as np
-import time
-import yaml
-
 import gymnasium as gym
 
 from dataclasses import asdict
 
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, Vehicle
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.road.lane import StraightLane, LineType, SineLane
 
@@ -89,83 +86,124 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         Make a road composed of a straight n-lane highway with a merge ramp and an exit ramp
 
         Composed of 7 longitudinal sections:
-        1. Before
-        2. Converging
-        3. Merge ramp connection
-        4. Mid
-        5. Exit ramp connection
-        6. Diverging
-        7. After
+        1. Before (j-k)
+        2. Converging (k-b)
+        3. Merge ramp connection (b-c)
+        4. Mid (c-d)
+        5. Exit ramp connection (d-e)
+        6. Diverging (e-l)
+        7. After (l-m)
+
+        The road network is constructed as follows:
+
+                                         /--(l)---(m)
+        (a)---------(b)---(c)---(d)---(e)---------(f)
+        (j)---(k)--/
+
+        Each of the segments is a straight lane (or set of lanes in the case of a through f), except for k-b and e-l which are sine lanes to model the curves of the merge and exit ramps.
+
+        To adhere to highway environment's indexing scheme, the lanes are added to the road network from top to bottom.
 
         """
 
+        # Configuring road geometry
         lane_width_m = self.config["lane_width_m"]
         lanes_count = self.config["lanes_count"]
         ends_m = self.config["ends_m"] # Before, converging, merge, mid, exit, diverging, after
 
         c, s, n = LineType.CONTINUOUS_LINE, LineType.STRIPED, LineType.NONE
 
-        # === HIGHWAY LANES ===
+        # Arrays of line types for accurate drawing of multi-lane highway with merge and exit ramps
 
-        # Initializing the line types for each lane (one per differing section)
         line_type = [[c, s]] + [[n, s]] * (lanes_count-2) + [[n, c]]
         line_type_merge = [[c, s]] + [[n, s]] * (lanes_count-2) + [[n, s]]
         line_type_exit = [[s, s]] + [[n, s]] * (lanes_count-2) + [[n, c]]
 
+        # Constructing the road network
+
         net = RoadNetwork()
 
+        amplitude = self.config["merge_amplitude"]
+
+        # ==== EXIT LANE (e-l-m) ====
+
+        self.merging_de = StraightLane(
+            [sum(ends_m[:4]), -lane_width_m],
+            [sum(ends_m[:5]), -lane_width_m],
+            line_types=[c,n],
+            forbidden=True,
+        )
+
+        self.merging_el = SineLane(
+            self.merging_de.position(ends_m[4], 0) + [0, -amplitude],
+            self.merging_de.position(sum(ends_m[4:6]), 0) + [0, -amplitude],
+            amplitude,
+            2 * np.pi / (2 * ends_m[5]),
+            np.pi / 2,
+            line_types=[c,c],
+            forbidden=True,
+        )
+
+        self.merging_lm = StraightLane(
+            self.merging_el.position(ends_m[5], 0),
+            self.merging_el.position(ends_m[5], 0) + [ends_m[6], 0],
+            line_types=[c, c],
+            forbidden=True,
+        )
+
+        net.add_lane("d", "e", self.merging_de)
+        net.add_lane("e", "l", self.merging_el)
+        net.add_lane("l", "m", self.merging_lm)
+
+        # ==== STRAIGHT LANES (a-b-c-d-e-f) ====
+
+        # Array containing y-coordinates for each lane in highway
         y = list(range(0, int(lanes_count * lane_width_m + 1), int(lane_width_m)))
 
-        for i in range(lanes_count):
-            net.add_lane( # Before + Converging
-                "a",
-                "b",
-                StraightLane(
-                    [0, y[i]],
-                    [sum(ends_m[:2]), y[i]],
-                    line_types=line_type[i],
-                ),
-            )
-            net.add_lane( # Merge ramp connection
-                "b",
-                "c",
-                StraightLane(
-                    [sum(ends_m[:2]), y[i]],
-                    [sum(ends_m[:3]), y[i]],
-                    line_types=line_type_merge[i],
-                ),
-            )
-            net.add_lane( # Mid
-                "c",
-                "d",
-                StraightLane(
-                    [sum(ends_m[:3]), y[i]],
-                    [sum(ends_m[:4]), y[i]],
-                    line_types=line_type[i],
-                ),
-            )
-            net.add_lane( # Exit ramp connection
-                "d",
-                "e",
-                StraightLane(
-                    [sum(ends_m[:4]), y[i]],
-                    [sum(ends_m[:5]), y[i]],
-                    line_types=line_type_exit[i],
-                ),
-            )
-            net.add_lane( # Diverging + After
-                "e",
-                "f",
-                StraightLane(
-                    [sum(ends_m[:5]), y[i]],
-                    [sum(ends_m), y[i]],
-                    line_types=line_type[i],
-                ),
-            )
+        self.straight_lane_nodes = ["a", "b", "c", "d", "e", "f"]
+
+        for i in range(lanes_count): # lane index
+
+            # Defining the different straight lane segments
+            
+            setattr(self, f"straight_ab_{i}", StraightLane( # Before converging
+                [0, y[i]],
+                [sum(ends_m[:2]), y[i]],
+                line_types=line_type[i],
+            ))
+
+            setattr(self, f"straight_bc_{i}", StraightLane( # Merge ramp connection
+                [sum(ends_m[:2]), y[i]],
+                [sum(ends_m[:3]), y[i]],
+                line_types=line_type_merge[i],
+            ))
+            setattr(self, f"straight_cd_{i}", StraightLane( # Mid section
+                [sum(ends_m[:3]), y[i]],
+                [sum(ends_m[:4]), y[i]],
+                line_types=line_type[i],
+            ))
+            setattr(self, f"straight_de_{i}", StraightLane( # Exit ramp connection
+                [sum(ends_m[:4]), y[i]],
+                [sum(ends_m[:5]), y[i]],
+                line_types=line_type_exit[i],
+            ))
+            setattr(self, f"straight_ef_{i}", StraightLane( # Diverging + After
+                [sum(ends_m[:5]), y[i]],
+                [sum(ends_m), y[i]],
+                line_types=line_type[i],
+            ))
+            
+            # Adding all the straight segments to the road network
+
+            for j in range(len(self.straight_lane_nodes) - 1): # segment indexing
+                net.add_lane(
+                    self.straight_lane_nodes[j],
+                    self.straight_lane_nodes[j + 1],
+                    getattr(self, f"straight_{self.straight_lane_nodes[j]}{self.straight_lane_nodes[j + 1]}")
+                )
 
 
-        # MERGING LANE (modeling the curve using sine wave)
-        amplitude = self.config["merge_amplitude"]
+        # ==== MERGING LANE (j-k-b-c) ====
 
         self.mergeramp_startlat = amplitude*2 + lane_width_m*lanes_count
 
@@ -191,45 +229,11 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             forbidden=True,
         )
 
-
         net.add_lane("j", "k", self.merging_jk)
         net.add_lane("k", "b", self.merging_kb)
         net.add_lane("b", "c", self.merging_bc)
 
-        # EXIT LANE (modeling the curve using sine wave)
-
-        self.merging_de = StraightLane(
-            [sum(ends_m[:4]), -lane_width_m],
-            [sum(ends_m[:5]), -lane_width_m],
-            line_types=[c,n],
-            forbidden=True,
-        )
-
-        # exit_ref = StraightLane(
-        #     [sum(ends_m[:4]), -lane_width_m - amplitude],
-        #     [sum(ends_m[:5]), -lane_width_m - amplitude],
-        # )
-
-        self.merging_el = SineLane(
-            self.merging_de.position(ends_m[4], 0) + [0, -amplitude],
-            self.merging_de.position(sum(ends_m[4:6]), 0) + [0, -amplitude],
-            amplitude,
-            2 * np.pi / (2 * ends_m[5]),
-            np.pi / 2,
-            line_types=[c,c],
-            forbidden=True,
-        )
-
-        self.merging_lm = StraightLane(
-            self.merging_el.position(ends_m[5], 0),
-            self.merging_el.position(ends_m[5], 0) + [ends_m[6], 0],
-            line_types=[c, c],
-            forbidden=True,
-        )
-
-        net.add_lane("d", "e", self.merging_de)
-        net.add_lane("e", "l", self.merging_el)
-        net.add_lane("l", "m", self.merging_lm)
+        # Building the road object with the constructed network and random number generator
 
         self.road = Road(
             network = net,
@@ -237,7 +241,37 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             record_history = self.config["show_trajectories"],
         )
 
-    def _make_stock_vehicles(self) -> None:
+    def _get_current_lateral_boundaries(self, vehicle: Vehicle) -> None:
+        """
+        Returns the boundaries of the road for a given vehicle.
+        The boundaries are defined as the left and right edges of the road.
+        """
+        current_segment = vehicle.lane_index
+        current_position = vehicle.position[0], vehicle.position[1]
+        if current_segment[0] in self.straight_lane_nodes and current_segment[1] in self.straight_lane_nodes:
+            min_index = 0
+            max_index = len(self.road.network.all_side_lanes(current_segment)) - 1
+
+        else:
+            min_index = 0
+            max_index = 0
+
+        left_boundary = self.road.network.get_lane(current_segment[0], current_segment[1], min_index).position(longitudinal=current_position[0]) + np.array([0, self.lane_width_m / 2])
+        right_boundary = self.road.network.get_lane(current_segment[0], current_segment[1], max_index).position(longitudinal=current_position[0]) - np.array([0, self.lane_width_m / 2])
+        
+        return left_boundary, right_boundary
+    
+    def _is_out_of_bounds(self, vehicle: Vehicle) -> bool:
+        """
+        Checks if a vehicle is out of the road boundaries.
+        A vehicle is considered out of bounds if it is outside the lateral boundaries of the road.
+        """
+        left_boundary, right_boundary = self._get_current_lateral_boundaries(vehicle)
+        vehicle_position = vehicle.position[1]
+        
+        return not (right_boundary[1] - vehicle.WIDTH / 2 <= vehicle_position <= left_boundary[1] + vehicle.WIDTH / 2)
+    
+    def _make_vehicles(self) -> None:
 
         self.controlled_vehicles = []
 
@@ -272,7 +306,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
     def _reset(self) -> None:
         self._make_road()
-        self._make_stock_vehicles()
+        self._make_vehicles()
 
     def _reward(self, action: int) -> float:
         reward = 0.0
@@ -283,7 +317,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # if ego.position[0] > sum(self.config['ends_m'][:3]):
         #     reward -= abs(ego.lane_index[2] - 4) * 25.0
 
-        # MINIMIZE TTC
+        # Intermittent reward for risky actions (accelerating and changing lanes) when close to the exit ramp
         for adv in adversaries:
             poly_ttc = PolygonTTCCalculator.compute_ttc(ego, adv)
 
@@ -295,7 +329,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # REACHED GOAL
         if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':
             if not ego.crashed:
-                reward += 50.0
+                reward += 100.0
 
         # CRASHES
         if ego.crashed:
@@ -303,7 +337,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         for adv in adversaries:
             if adv.crashed:
-                reward -= 50.0
+                reward -= 75.0
+
+        # Negative reward for not taking risky actions when close to the exit ramp
 
         return float(reward)
 
@@ -320,6 +356,15 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         self._simulate()
 
+        # Crash if driving out of bounds (off the road)
+
+        for vehicle in self.road.vehicles:
+            if self._is_out_of_bounds(vehicle):
+                vehicle.crash()
+
+        if self._is_out_of_bounds(self.ego):
+            self.ego.crash()
+
         obs = self.observation_type.observe()
 
         reward = self._reward(split_actions)
@@ -328,11 +373,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         truncated = False
 
-        if self.ego.lane_index[0] == 'l' and self.ego.lane_index[1] == 'm':
-            if not self.ego.crashed:
-                truncated = True
-        
-        if self.steps >= self.config['duration']:
+        if (self.ego.lane_index[0] == 'l' and self.ego.lane_index[1] == 'm' and not self.ego.crashed) or self.steps >= self.config['duration']:
             truncated = True
 
         return obs, reward, terminated, truncated, {}

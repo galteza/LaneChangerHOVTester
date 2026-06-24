@@ -194,9 +194,6 @@ class MASACRL():
             next_q_value = joint_reward + (1 - joint_done) * self.args.gamma * min_qf_next_target
 
         qf1_a_values = self.qf1(flat_joint_obs, flat_joint_actions)
-
-        ###### HEREEEE
-
         qf2_a_values = self.qf2(flat_joint_obs, flat_joint_actions)
         
         qf1_loss = F.mse_loss(qf1_a_values, next_q_value)

@@ -50,6 +50,7 @@ class EnvArgs:
     screen_width: int = 1200
     screen_height: int = 400
     centering_position: List[float] = field(default_factory=lambda: [0.2, 0.5])
+    offscreen_rendering: bool = False
 
     # Simulation configuration
     duration: int = 10000             # Seconds per episode
