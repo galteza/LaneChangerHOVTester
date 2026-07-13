@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import torch
+
 @dataclass
 class EnvActionConfigArgs:
     type: str = "ContinuousAction"
@@ -18,7 +20,7 @@ class EnvObsConfigArgs:
     type: str = "Kinematics"
     normalize: bool = False
     absolute: bool = True
-    vehicles_count: int = 10
+    vehicles_count: int = 11 # 1 System Under Test (SUT) + 10 Adversaries
     features: List[str] = field(
         default_factory=lambda: ["presence", "x", "y", "vx", "vy", "heading"]
     )
@@ -29,18 +31,43 @@ class Env_ObsArgs:
     observation_config: EnvObsConfigArgs = field(default_factory=EnvObsConfigArgs)
 
 @dataclass
+class EnvRewardArgs:
+    release_distance: float = 20.0
+
+    longitudinal_occupancy_longitudinal_corridor: float = 25.0
+    lateral_occupancy_longitudinal_corridor: float = 10.0
+    lane_keeping_corridor: float = 2.0
+
+
+@dataclass
 class EnvArgs:
+    
     """Highway-env geometry, multi-agent infrastructure, and generation setup."""
+
+    action: EnvActionArgs = field(default_factory=EnvActionArgs)
+
+    observation: Env_ObsArgs = field(default_factory=Env_ObsArgs)
+
+    reward: EnvRewardArgs = field(default_factory=EnvRewardArgs)
+
     env_id: str = "merge_exit_highway"
+    render_mode: Optional[str] = None
     lanes_count: int = 5
     lane_width_m: int = 4
     # Establishing lengths of each physical section
     ends_m: List[int] = field(default_factory=lambda: [150, 80, 80, 300, 80, 80, 150])
     merge_amplitude: float = 3.25
 
+    # Observation modification parameters
+    speed_limit: float = 20.0 # lifted from highway-env default
+    rel_dist_normalizer: float = 20.0
+    ttc_normalizer: float = 10.0
+
     # Vehicle configuration
     vehicles_count: int = 20          # Total ambient cars
-    controlled_vehicles: int = 10     # 1 System Under Test (SUT) + 10 Adversaries
+    controlled_vehicles: int = 0 # defined post init
+    adv_crash_penalization: List[bool] = field(default_factory=lambda: [False]*10)
+    adv_rewards: List[float] = field(default_factory=lambda: [0.0]*10)
     vehicle_density: float = 0.0
     initial_lane_id: int = 0
     initial_spacing: int = 2
@@ -57,9 +84,9 @@ class EnvArgs:
     simulation_frequency: int = 10
     policy_frequency: int = 10        # How often MPC is called
 
-    action: EnvActionArgs = field(default_factory=EnvActionArgs)
-
-    observation: Env_ObsArgs = field(default_factory=Env_ObsArgs)
+    def __post_init__(self):
+        self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1 # 1 System Under Test (SUT) + 10 Adversaries     
+    
 
 
 
@@ -71,6 +98,7 @@ class RLArgs:
     seed: int = 1
     torch_deterministic: bool = True
     cuda: bool = True
+    device: str = "cuda" if torch.cuda.is_available() and cuda else "cpu"
     track: bool = False
     wandb_project_name: str = "cleanRL"
     wandb_entity: str = None
@@ -79,6 +107,7 @@ class RLArgs:
     env_id: str = "merge_exit_highway"
     num_agents: int = 0 # to be defined post init
     obs_dim: int = 0 # to be defined post init
+    feature_dim: int = 6 # presence, x, y, speed, "heading", 2D TTC
     action_dim: int = 2  # Throttle, Steering
     
     total_timesteps: int = 1000000
@@ -86,7 +115,7 @@ class RLArgs:
     gamma: float = 0.99
     tau: float = 0.005
     batch_size: int = 256
-    learning_starts: int = 5e3
+    learning_starts: int = 5e2
     policy_lr: float = 3e-4
     q_lr: float = 1e-3
     policy_frequency: int = 2
@@ -94,9 +123,12 @@ class RLArgs:
     alpha: float = 0.2
     autotune: bool = True
 
+    checkpoints_num: int = 10
+    logging_frequency: int = 100
+
     def __post_init__(self):
         self.num_agents = self.env.controlled_vehicles
-        self.obs_dim = 2 * len(self.env.observation.observation_config.features)
+        self.obs_dim = self.num_agents * self.feature_dim + (self.feature_dim - 1)
 
 
 @dataclass
