@@ -10,7 +10,9 @@ from highway_env.road.lane import StraightLane, LineType, SineLane
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
 
-from configs.configs import EnvArgs
+from src.env.risk_calculators import PolygonTTCCalculator
+
+from configs.configs import EnvArgs, RLArgs
 
 class MergeExitLaneHighway_Environment(AbstractEnv):
     """
@@ -18,10 +20,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
     ## Action Space
     
-        MultiAgentAction: For n-total vehicles, an 'ndarray' with shape (n, 2) representing the acceleration and steering controls.
-        (n vehicles, each with acceleration and steering controls in the continuous space)
+        MultiAgentAction: For n-total vehicles, an 'ndarray' with shape (n, 2) representing the acceleration and steering controls for each.
         
-        Min and max values for the acceleration and steering are detailed in the parameters file.
+        Min and max values for acceleration and steering imposed and detailed in the parameters file.
 
     ## Observation Space
 
@@ -60,7 +61,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         The ego vehicle is controlled using IDM for low-level and MOBIL for high-level planning.
         
         The adversarial platoon is arranged such that there are two vehicle pairs per lane. Starting velocities are randomized.
-        The ego vehicle is controlled using __ for low-level and MASAC-RL for high-level planning.
+        Each is controlled using MDP for low-level and MASAC-RL for high-level planning.
 
     ## Episode Truncation
 
@@ -77,7 +78,6 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         config.update(asdict(env_params))
 
         return config
-
 
     def _make_road(self) -> None:
 
@@ -102,7 +102,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         Each of the segments is a straight lane (or set of lanes in the case of a through f), except for k-b and e-l which are sine lanes to model the curves of the merge and exit ramps.
 
-        To adhere to highway environment's indexing scheme, the lanes are added to the road network from top to bottom.
+        To adhere to highway environment library's indexing scheme, the lanes are added to the road network from top to bottom.
 
         """
 
@@ -199,7 +199,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 net.add_lane(
                     self.straight_lane_nodes[j],
                     self.straight_lane_nodes[j + 1],
-                    getattr(self, f"straight_{self.straight_lane_nodes[j]}{self.straight_lane_nodes[j + 1]}")
+                    getattr(self, f"straight_{self.straight_lane_nodes[j]}{self.straight_lane_nodes[j + 1]}_{i}")
                 )
 
 
@@ -242,38 +242,55 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         )
 
     def _get_current_lateral_boundaries(self, vehicle: Vehicle) -> None:
+        
         """
         Returns the boundaries of the road for a given vehicle.
         The boundaries are defined as the left and right edges of the road.
+        
+        For use mainly in determining whether given vehicle is currently out of bounds (off the road) and should be crashed.
+        
         """
-        current_segment = vehicle.lane_index
+
+        lane_width_m = self.config["lane_width_m"]
+
+        current_segment = vehicle.lane_index # tuple of (start_node, end_node, lane_index)
         current_position = vehicle.position[0], vehicle.position[1]
+
+        # Grabbing the lane indices for the outermost lanes of the vehicle at its current point
+        
         if current_segment[0] in self.straight_lane_nodes and current_segment[1] in self.straight_lane_nodes:
             min_index = 0
             max_index = len(self.road.network.all_side_lanes(current_segment)) - 1
-
         else:
             min_index = 0
             max_index = 0
 
-        left_boundary = self.road.network.get_lane(current_segment[0], current_segment[1], min_index).position(longitudinal=current_position[0]) + np.array([0, self.lane_width_m / 2])
-        right_boundary = self.road.network.get_lane(current_segment[0], current_segment[1], max_index).position(longitudinal=current_position[0]) - np.array([0, self.lane_width_m / 2])
+        # Calculating absolute position of lane boundaries
+
+        left_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], min_index)).position(longitudinal=current_position[0], lateral=0) + np.array([0, lane_width_m / 2])
+        right_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], max_index)).position(longitudinal=current_position[0], lateral=0) - np.array([0, lane_width_m / 2])
         
         return left_boundary, right_boundary
     
     def _is_out_of_bounds(self, vehicle: Vehicle) -> bool:
+
         """
         Checks if a vehicle is out of the road boundaries.
         A vehicle is considered out of bounds if it is outside the lateral boundaries of the road.
-        """
-        left_boundary, right_boundary = self._get_current_lateral_boundaries(vehicle)
-        vehicle_position = vehicle.position[1]
         
-        return not (right_boundary[1] - vehicle.WIDTH / 2 <= vehicle_position <= left_boundary[1] + vehicle.WIDTH / 2)
+        """
+
+        left_boundary, right_boundary = self._get_current_lateral_boundaries(vehicle)
+        vehicle_position = vehicle.position[1] # only counting lateral position for out-of-bounds check
+        
+        # Assuming 0 heading, crash if vehicle borders touch or cross road boundaries
+        return not (right_boundary[1] >= vehicle_position >= left_boundary[1])
     
     def _make_vehicles(self) -> None:
 
         self.controlled_vehicles = []
+
+        # LANE CHANGER: Spawns on the on-ramp and is controlled by IDM + MOBIL. The goal is to reach the exit ramp successfully.
 
         self.ego_lane = self.road.network.get_lane(("j", "k", 0))
 
@@ -285,6 +302,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         )
 
         self.road.vehicles.append(self.ego)
+
+        # ADVERSARIAL VEHICLES: 2 per lane, controlled by MDP + MASAC-RL. The goal is to maximize risk between ego and adversaries, while minimizing risk between adversaries.
+        # Pairs each lane, one situated at 20m in and one at 40m in, with randomized starting velocities between 20 and 30 m/s.
 
         lanes_count = self.config["lanes_count"]
 
@@ -301,47 +321,12 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 self.road.vehicles.append(adv)
                 self.controlled_vehicles.append(adv)
 
-        # print(self.controlled_vehicles)
-
-
     def _reset(self) -> None:
+
+        # Remake the road and all the vehicles for clean slate
+
         self._make_road()
         self._make_vehicles()
-
-    def _reward(self, action: int) -> float:
-        reward = 0.0
-
-        ego = self.ego
-        adversaries = self.controlled_vehicles
-
-        # if ego.position[0] > sum(self.config['ends_m'][:3]):
-        #     reward -= abs(ego.lane_index[2] - 4) * 25.0
-
-        # Intermittent reward for risky actions (accelerating and changing lanes) when close to the exit ramp
-        for adv in adversaries:
-            poly_ttc = PolygonTTCCalculator.compute_ttc(ego, adv)
-
-            if 1.0 <= poly_ttc <= 4.0: # dangerously close
-                reward += 4.0 / (poly_ttc + 0.1)
-            elif 0.0 <= poly_ttc < 1.0: # crash soon
-                reward -= 10.0
-
-        # REACHED GOAL
-        if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':
-            if not ego.crashed:
-                reward += 100.0
-
-        # CRASHES
-        if ego.crashed:
-            reward -= 100.0
-
-        for adv in adversaries:
-            if adv.crashed:
-                reward -= 75.0
-
-        # Negative reward for not taking risky actions when close to the exit ramp
-
-        return float(reward)
 
     def _is_terminated(self) -> bool:
         """Tells the engine to stop if the car crashes."""
@@ -350,20 +335,161 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     def _is_truncated(self) -> bool:
         """Tells the engine to stop if the time limit is reached."""
         return self.time >= self.config["duration"]
+
+    def _reward(self, action: int) -> float:
+        
+        # Actions already reverted to original highway-env action space
+
+        """
+        Reward is an array of n elements, one element pertaining to one adversary.
+        Indexing is based on order in controlled vehicles list, based on order of spawn in _make_vehicles().
+
+        Collective rewards
+
+        Adversaries must:
+        (1) Reduce TTC with ego
+        (2) Increase TTC with other adversaries to avoid crashing into each other
+        (3) Avoid crashing into ego or other adversaries (higher penalty for ego crash)
+        (4) Occupy space surrounding the ego vehicle to make it difficult for ego to switch lanes or exit the highway until last second
+        (5) Perform a sudden change in behavior to allow ego to exit successfully, if possible
+        (6) Bunch up like a gate (especially at the end) to create a platoon that is difficult for ego to navigate through
+
+
+        The reward function was designed with the following questions in mind:
+
+        (1) Can the adversarial platoon exhbit emely risky behavior while still avoiding crashing into each other and the ego vehicle?
+        (2) Can the adversarial platoon exhibit a sudden change in behavior (from fighting during cruising to giving way to ego) to allow ego to reach the exit ramp successfully?
+        (3) Can the adversarial platoon bring out the vulnerabilities of the ego vehicle's IDM + MOBIL control system, and exploit them to maximize risk?
+        
+        """
+
+        # ====== SETUP =======
+
+        # Setting the reward arguments
+
+        reward_args = self.config["reward"]
+
+        # Setting important environment-related variables
+        
+        ego = self.ego
+        adversaries = self.controlled_vehicles
+        dist_to_exit = sum(self.config["ends_m"][:4]) - ego.position[0]
+
+        # Initializing the rewards
+
+        indiv_rewards = [0.0] * len(adversaries)
+        team_reward = 0.0
+
+        # Splitting bullying into two phases: (1) blocking the ego from reaching the exit ramp, and (2) allowing the ego to reach the exit ramp successfully
+
+        is_release_phase = dist_to_exit < reward_args["release_distance"]
+
+        # ====== LOCAL REWARDS: Rewarding each adversary =======
+
+        for i, adv in enumerate(adversaries):
+
+            adv_reward = 0.0
+
+            # Drive safe!
+            if adv.crashed and not self.config["adv_crash_penalization"][i]:
+                adv_reward -= 55.0 # Penalty for bad driving leading to crash
+
+            # Don't endanger other team mates!
+            for j, other_adv in enumerate(adversaries):
+                if i == j: continue
+                adv_adv_ttc = PolygonTTCCalculator.compute_ttc(adv, other_adv)
+
+                if 0.0 <= adv_adv_ttc < 1.0: # REALLY high risk of fratricide
+                    adv_reward -= 15.0
+                elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
+                    adv_reward -= 8.0 / adv_adv_ttc # [2, 8]
+                elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
+                    adv_reward -= adv_adv_ttc / 1.5 # [1, inf]
+            
+            # Bully the ego!
+            adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
+
+            if not is_release_phase: # Still trying to block on the highway
+                if 0.0 <= adv_ego_ttc < 1.0: # Okay uhh, too much
+                    adv_reward -= 30.0
+                elif 1.0 <= adv_ego_ttc <= 4.0: # Cool, try to keep it like this
+                    adv_reward += 4.0 / adv_ego_ttc # [1, 4]
+                elif adv_ego_ttc > 4.0: # Too safe, get closer to ego!
+                    adv_reward -= adv_ego_ttc / 4.0 # [1, inf]
+            else: # Release phase, let ego go!
+                if 0.0 <= adv_ego_ttc <= 4.0: # OkaaaYYY you really gotta back off now 
+                    adv_reward -= 4.0 / adv_ego_ttc # [1, 4]
+
+            # Consolidate rewards
+
+            indiv_rewards[i] += adv_reward
+
+        # ====== GLOBAL REWARDS: Rewarding team performance =======
+        
+        # Try sandwiching the ego
+
+        longitudinal_occupancy_longitudinal_corridor = reward_args["longitudinal_occupancy_longitudinal_corridor"]
+        lateral_occupancy_longitudinal_corridor = reward_args["lateral_occupancy_longitudinal_corridor"]
+        lane_keeping_corridor = reward_args["lane_keeping_corridor"]
+
+        if not is_release_phase:
+            zones_occupied = {"front": 0, "back": 0, "left": 0, "right": 0}
+
+            for adv in adversaries:
+                dx = adv.position[0] - ego.position[0]
+                dy = adv.position[1] - ego.position[1]
+
+                if 0 < dx < longitudinal_occupancy_longitudinal_corridor and abs(dy) < lane_keeping_corridor: # 25m in front of ego and within lane width
+                    zones_occupied["front"] = 1
+                elif -longitudinal_occupancy_longitudinal_corridor < dx < 0 and abs(dy) < lane_keeping_corridor: # 25m behind ego and within lane width
+                    zones_occupied["back"] = 1
+                elif abs(dx) < lateral_occupancy_longitudinal_corridor and abs(dy) > lane_keeping_corridor:
+                    if dy > 0:
+                        zones_occupied["right"] = 1
+                    elif dy < 0:
+                        zones_occupied["left"] = 1
+            
+            occupied_count = sum(zones_occupied.values())
+            team_reward += occupied_count ** 2 * 2.5
+
+        # Ego reached goal!!
+        if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':
+            if not ego.crashed:
+                team_reward += 100.0
+
+        # Ego has crashed!!
+        if ego.crashed:
+            team_reward -= 100.0
+
+        for i in range(len(adversaries)):
+            indiv_rewards[i] += team_reward # Penalty for crashing into ego
+
+        return indiv_rewards
     
     def step(self, split_actions):
+        
+        # Actions shape has been reverted to highway env original space (tuple of tuples, one for each vehicle, each containing acceleration and steering)
+
         self.action_type.act(split_actions)
 
         self._simulate()
 
         # Crash if driving out of bounds (off the road)
-
         for vehicle in self.road.vehicles:
             if self._is_out_of_bounds(vehicle):
-                vehicle.crash()
+                
+                vehicle.crashed = True
 
+                # Penalize adversary for crashing
+                
+                if vehicle in self.controlled_vehicles:
+                    self.config["adv_crash_penalization"][self.controlled_vehicles.index(vehicle)] = True
+
+        # Foolproof crashing of ego if it drives off the road (shouldn't happen with IDM + MOBIL, but just in case)
         if self._is_out_of_bounds(self.ego):
-            self.ego.crash()
+            self.ego.crashed = True
+
+        # Grab new observations, rewards, and termination/truncation flags
 
         obs = self.observation_type.observe()
 
@@ -385,101 +511,165 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         Wrapper takes the multi-agent observation space of the original environment, and takes the necessary
          observations for both and processes it to be arranged in one dimension.
 
-        Observation will be 
+        Observation will be adversarial vehicle (adv)-centric; every other vehicle's observation values will be modified
+        to be in relation to the main adv.
+
+        The derived values are detailed in the chart below. Presence values will be binary, while the other 5 features are 
+        normalized to a range of 0 to 1.
+
+        - Dist. from exit: Fraction of total distance from init. point to goal
+        - Dist. from adv: Clipped to range of 0 to 20m and normalized to 0 to 1.
+        - 2D TTC: Clipped to range of 0 to 10s and normalized to 0 to 1.
+
+
+                   |      adv (self)     |        ego         |        adv 1       | ..... |    adv n-1         |
+        ---------------------------------------------------------------------------------------------------------
+         Presence  |        self         |       self         |         self       | ..... |      self          |
+         x         |  dist. from exit    |  dist. from adv    |   dist. from adv   | ..... |  dist. from adv    |
+         y         |  dist. from exit    |  dist. from adv    |   dist. from adv   | ..... |  dist. from adv    |
+         speed     |        self         | mag. of vec. diff. | mag. of vec. diff. | ..... | mag. of vec. diff. |
+         "heading" |        self         | angle of vec. diff | angle of vec. diff | ..... | angle of vec. diff |
+         2D TTC    |                     |   with adv         |   with adv         | ..... |    with adv        |
+
+         
+        This, when flattened to a one-dimensional array, serves as the input of the actor NN.
+
+
         """
 
         super().__init__(env)
 
-        self.adv_agents = self.env.unwrapped.config.get(
+        self.configs = self.env.unwrapped.config
+        self.RLargs = RLArgs()
+
+        self.adv_agents = self.configs.get(
             'controlled_vehicles', 10
         )
 
-        self.num_features = len(
-            self.env.config.get('observation', {}).get('observation_config', {}).get('features', [1,2,3,4,5,6])
-        )
-
     def observation(self, obs):
+        """
+        Builds the MASAC feature vector directly from the physics engine objects.
+        Ignores the default 'obs' matrix to prevent floating-point mismatch and sorting bugs.
+        Vector shape: [Self (5), Victim (6), Other Advs sorted by distance (n-1 * 6)]
 
         """
-        Intersects the raw environment output and transforms it into a 
-        clean, zero-redundancy matrix of shape (n, 12).
-        """
 
-        # print(np.stack(obs).shape)
+        def _take_magnitude(vx, vy):
+            return np.sqrt(vx**2 + vy**2)
         
-        self.unwrapped_env = self.env.unwrapped
-        self.victim = None
+        env = self.env.unwrapped
+        
+        # Grab target distances
 
-        self.target_long_dist = self.unwrapped_env.config['ends_m'][4]
-        self.target_lat_dist = -self.unwrapped_env.config['lane_width_m']
+        target_long_dist = sum(env.config['ends_m'][:4])
+        target_lat_dist = -env.config['lane_width_m']
         
-        # The victim is the vehicle on the road that is NOT in our controlled platoon list
-        for vehicle in self.unwrapped_env.road.vehicles:
-            if vehicle not in self.unwrapped_env.controlled_vehicles:
+        # Identify the victim vehicle (actual object)
+        
+        victim = None
+        for vehicle in env.road.vehicles:
+            if vehicle not in env.controlled_vehicles:
                 victim = vehicle
                 break
-                
-        # Instantiation
-        processed_obs = np.zeros((self.adv_agents, 12), dtype=np.float32)
-        
-        # 3. Loop through each of your 10 platoon agents to build their unique views
-        for i in range(self.adv_agents):
-            ego_raw = obs[i][0]
-            
-            # Extract Ego absolute features (assuming standard highway-env kinematics ordering)
-            ego_presence = ego_raw[0]
-            ego_x        = ego_raw[1]
-            ego_y        = ego_raw[2]
-            ego_vx       = ego_raw[3]
-            ego_vy       = ego_raw[4]
-            ego_heading  = ego_raw[5]
-            
-            # 4. Calculate relative states if the victim is alive and active
-            if victim is not None and ego_presence > 0:
-                target_presence = 1.0
-                # Relative calculations: Target minus Ego
-                rel_long_dist   = victim.position[0] - self.unwrapped_env.controlled_vehicles[i].position[0]
-                rel_lat_dist    = victim.position[1] - self.unwrapped_env.controlled_vehicles[i].position[1]
-                rel_vel_long    = victim.speed - self.unwrapped_env.controlled_vehicles[i].speed
-                rel_vel_lat     = 0.0 - ego_vy  # Assuming victim has negligible lateral velocity
-                rel_heading     = victim.heading - ego_heading
-            else:
-                # Fallback values if the victim crashes out or the agent is inactive
-                target_presence = 0.0
-                rel_long_dist   = 0.0
-                rel_lat_dist    = 0.0
-                rel_vel_long    = 0.0
-                rel_vel_lat     = 0.0
-                rel_heading     = 0.0
 
-            processed_obs[i] = [
-                ego_presence,
-                self.target_long_dist - ego_x,
-                self.target_lat_dist - ego_y,
-                ego_vx,
-                ego_vy,
-                ego_heading,
-                target_presence,
-                rel_long_dist,
-                rel_lat_dist,
-                rel_vel_long,
-                rel_vel_lat,
-                rel_heading
-            ]
+        # Initialize the processed observation array
+
+        processed_obs = np.zeros((self.adv_agents, self.RLargs.obs_dim), dtype=np.float32)
+
+        # Build all (6n + 5) observations for each of adversaries
+
+        for i in range(self.adv_agents):
+            
+            # Defense against despawned agents (if a platoon car is deleted from the engine)
+            if i >= len(env.controlled_vehicles):
+                continue # Leaves this agent's row as pure zeros
+                
+            self_veh = env.controlled_vehicles[i]
+
+            # Features to be built modularly, first for self, then for victim (lane changer), then for other adversaries, and finally concatenated into one row of the observation matrix
+            
+            # ===== SELF OBSERVATION =====
+            self_x, self_y = self_veh.position
+            self_vx, self_vy = self_veh.velocity
+            
+            current_adv_obs = np.array([
+                1.0, # Presence
+                (target_long_dist - self_x) / target_long_dist,
+                (self_y - target_lat_dist) / (self.configs.get('lane_width_m', 4) * self.configs.get('num_lanes', 5) - target_lat_dist),
+                _take_magnitude(self_vx, self_vy) / self.configs.get('speed_limit', 20),
+                self_veh.heading / (2 * np.pi) + 0.5
+            ], dtype=np.float32)
+
+            # ===== VICTIM OBSERVATION =====
+            victim_obs = np.zeros(6, dtype=np.float32)
+            if victim is not None:
+                v_x, v_y = victim.position
+                v_vx, v_vy = victim.velocity
+                
+                ttc = PolygonTTCCalculator.compute_ttc(self_veh, victim)
+                
+                victim_obs = np.array([
+                    1.0, # Victim presence
+                    (v_x - self_x) / self.configs.get('rel_dist_normalizer', 20.0),
+                    (v_y - self_y) / self.configs.get('rel_dist_normalizer', 20.0),
+                    _take_magnitude(v_vx - self_vx, v_vy - self_vy) / self.configs.get('speed_limit', 20),
+                    np.arctan2(v_vy - self_vy, v_vx - self_vx) / (2 * np.pi) + 0.5,
+                    np.clip(ttc / self.configs.get('ttc_normalizer', 10.0), 0.0, 1.0)
+                ], dtype=np.float32)
+
+            # ===== OTHER ADV OBSERVATION =====
+            other_advs_list = []
+            
+            for j, other_veh in enumerate(env.controlled_vehicles):
+                if i == j: 
+                    continue # Skip self
+                    
+                o_x, o_y = other_veh.position
+                o_vx, o_vy = other_veh.velocity
+                
+                ttc = PolygonTTCCalculator.compute_ttc(self_veh, other_veh)
+                distance = np.hypot(o_x - self_x, o_y - self_y)
+                
+                feat = np.array([
+                    1.0, # Presence
+                    (o_x - self_x) / self.configs.get('rel_dist_normalizer', 20.0),
+                    (o_y - self_y) / self.configs.get('rel_dist_normalizer', 20.0),
+                    _take_magnitude(o_vx - self_vx, o_vy - self_vy) / self.configs.get('speed_limit', 20),
+                    np.arctan2(o_vy - self_vy, o_vx - self_vx) / (2 * np.pi) + 0.5,
+                    np.clip(ttc / self.configs.get('ttc_normalizer', 10.0), 0.0, 1.0)
+                ], dtype=np.float32)
+                
+                other_advs_list.append((distance, feat))
+                
+            # Sort other adversaries by distance so the network gets consistent structure
+            other_advs_list.sort(key=lambda x: x[0])
+            
+            # Flatten the sorted features, padding with zeros if any platoon cars despawned
+            other_adv_obs = np.zeros((self.adv_agents - 1) * 6, dtype=np.float32)
+            for idx, (_, feat) in enumerate(other_advs_list):
+                if idx < (self.adv_agents - 1):
+                    other_adv_obs[idx * 6 : (idx + 1) * 6] = feat
+
+            # ===== CONCATENATE =====
+            processed_obs[i] = np.concatenate([
+                current_adv_obs,
+                victim_obs,
+                other_adv_obs
+            ])
             
         return processed_obs
     
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
-        # print(np.stack(obs).shape)
-        # print(self.env.unwrapped.config['observation']['type'])
+
+        # Flatten the observation matrix
         return self.observation(obs), info
     
     def step(self, action):
         
         """
-        Expects action to be a NumPy matrix of shape (adv_agents, 2).
-        Converts it directly to the environment's tuple-of-tuples format without splitting.
+        Coming from the RL agent, action is a 2D NumPy array of shape (adv_agents, action_dim). Each row corresponds to an adversarial vehicle's action.
+        The wrapper formats into a highway-env's default tuple of tuples, where each inner tuple corresponds to an individual vehicle's action.
         """
         
         formatted_actions = tuple(tuple(action[i]) for i in range(self.adv_agents))
@@ -495,115 +685,11 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         else:
             collective_reward = float(reward)
         
-        # Process the raw dict output straight into your clean 10x12 state matrix
-        return self.observation(_obs), collective_reward, terminated, truncated, info
+        # Turn next observation into shape RL can read (flatten) and return everything
+        return self.observation(_obs), reward, terminated, truncated, info
     
 
-class PolygonTTCCalculator:
-    """
-    A high-performance NumPy utility class to compute the precise Time-to-Collision (TTC)
-    between two oriented rectangular vehicle bounding boxes.
-    """
-    
-    @staticmethod
-    def _line(p0, p1):
-        a = p0[1] - p1[1]
-        b = p1[0] - p0[0]
-        c = p0[0] * p1[1] - p1[0] * p0[1]
-        return a, b, c
 
-    @staticmethod
-    def _intersect(line0, line1):
-        a0, b0, c0 = line0
-        a1, b1, c1 = line1
-        D = a0 * b1 - a1 * b0
-        if abs(D) < 1e-5:
-            return np.array([np.nan, np.nan])
-        x = (b0 * c1 - b1 * c0) / D
-        y = (a1 * c0 - a0 * c1) / D
-        return np.array([x, y])
-
-    @staticmethod
-    def _ison(line_start, line_end, point):
-        if np.isnan(point[0]):
-            return False
-        crossproduct = (point[1] - line_start[1]) * (line_end[0] - line_start[0]) - (point[0] - line_start[0]) * (line_end[1] - line_start[1])
-        if abs(crossproduct) > 1e-5:
-            return False
-        dotproduct = (point[0] - line_start[0]) * (line_end[0] - line_start[0]) + (point[1] - line_start[1]) * (line_end[1] - line_start[1])
-        squaredlength = (line_end[0] - line_start[0])**2 + (line_end[1] - line_start[1])**2
-        return (dotproduct >= 0) and (dotproduct <= squaredlength)
-
-    @classmethod
-    def get_bounding_box_corners(cls, x, y, heading, length, width):
-        """Calculates the 4 absolute corner points of a vehicle."""
-        h_vec = np.array([np.cos(heading), np.sin(heading)])
-        perp_h_vec = np.array([-h_vec[1], h_vec[0]])
-        
-        point_up = np.array([x, y]) + h_vec * (length / 2.0)
-        point_down = np.array([x, y]) - h_vec * (length / 2.0)
-        
-        return [
-            point_up + perp_h_vec * (width / 2.0),
-            point_up - perp_h_vec * (width / 2.0),
-            point_down + perp_h_vec * (width / 2.0),
-            point_down - perp_h_vec * (width / 2.0)
-        ]
-
-    @classmethod
-    def _pairwise_ttc(cls, params_i, params_j):
-        """Computes directional ray-cast TTC from Pack I to Pack J."""
-        corners_i = cls.get_bounding_box_corners(params_i[0], params_i[1], params_i[4], params_i[5], params_i[6])
-        corners_j = cls.get_bounding_box_corners(params_j[0], params_j[1], params_j[4], params_j[5], params_j[6])
-        
-        v_i = np.array([params_i[2], params_i[3]])
-        v_j = np.array([params_j[2], params_j[3]])
-        direct_v = v_i - v_j
-        
-        rel_speed = np.linalg.norm(direct_v)
-        if rel_speed < 1e-5:
-            return np.inf
-
-        min_dist_ist = np.inf
-        valid_collision_course = False
-        edges_j = [(corners_j[0], corners_j[1]), (corners_j[2], corners_j[3]), 
-                   (corners_j[0], corners_j[2]), (corners_j[1], corners_j[3])]
-
-        for p_start in corners_i:
-            p_end = p_start + direct_v
-            ray_line = cls._line(p_start, p_end)
-            
-            for edge_start, edge_end in edges_j:
-                edge_line = cls._line(edge_start, edge_end)
-                ist = cls._intersect(ray_line, edge_line)
-                
-                if cls._ison(edge_start, edge_end, ist):
-                    leaving_check = direct_v[0] * (ist[0] - p_start[0]) + direct_v[1] * (ist[1] - p_start[1])
-                    if leaving_check >= 0:
-                        valid_collision_course = True
-                        dist_ist = np.linalg.norm(ist - p_start)
-                        if dist_ist < min_dist_ist:
-                            min_dist_ist = dist_ist
-
-        if not valid_collision_course or min_dist_ist == np.inf:
-            return np.inf
-            
-        return min_dist_ist / rel_speed
-
-    @classmethod
-    def compute_ttc(cls, veh_i, veh_j) -> float:
-        """
-        Public API: Call this to get the symmetrical polygon TTC between two highway-env vehicles.
-        """
-        # Format: (x, y, vx, vy, heading, length, width)
-        # Safely handle environments that use velocity vector arrays vs raw scalar speeds
-        v_i = getattr(veh_i, 'velocity', np.array([veh_i.speed * np.cos(veh_i.heading), veh_i.speed * np.sin(veh_i.heading)]))
-        v_j = getattr(veh_j, 'velocity', np.array([veh_j.speed * np.cos(veh_j.heading), veh_j.speed * np.sin(veh_j.heading)]))
-
-        params_i = (veh_i.position[0], veh_i.position[1], v_i[0], v_i[1], veh_i.heading, veh_i.LENGTH, veh_i.WIDTH)
-        params_j = (veh_j.position[0], veh_j.position[1], v_j[0], v_j[1], veh_j.heading, veh_j.LENGTH, veh_j.WIDTH)
-        
-        return min(cls._pairwise_ttc(params_i, params_j), cls._pairwise_ttc(params_j, params_i))
 
 # env = MergeExitLaneHighway_Environment()
 # env.render_mode = "human" # Tells Gymnasium to prepare a visual window
