@@ -19,73 +19,134 @@ from src.agents.platoon_masac import MASACRL, MultiAgentReplayBuffer
 # Imports for configs    
 
 from configs.configs import RLArgs
+
+# Import for video recording
+
+from gymnasium.wrappers import RecordVideo
     
 if __name__ == "__main__":
 
-    RLargs = tyro.cli(RLArgs)
+    RLargs = tyro.cli(RLArgs) # Load up the RL arguments from the configs
 
-    run_name = f"{RLargs.env_id}__{RLargs.exp_name}__{RLargs.seed}__{int(time.time())}"
-    save_dir = f"runs/{run_name}"
+    formatted_time = time.strftime("%Y%m%d-%H%M%S")
+    run_name = f"{RLargs.env_id}__{RLargs.exp_name}__{RLargs.seed}__{formatted_time}" # Name the run according to time
+    save_dir = f"runs/{run_name}" # Create a directory to save the upcoming training results
+    os.makedirs(save_dir, exist_ok=True) 
 
-    os.makedirs(save_dir, exist_ok=True)
+    # Initialize the SummaryWriter for TensorBoard logging
 
     writer = SummaryWriter(save_dir)
     
+    # Set random seeds for reproducibility
+
     random.seed(RLargs.seed)
     np.random.seed(RLargs.seed)
     torch.manual_seed(RLargs.seed)
-    torch.backends.cudnn.deterministic = RLargs.torch_deterministic
-    device = torch.device("cuda" if torch.cuda.is_available() and RLargs.cuda else "cpu")
+    torch.backends.cudnn.deterministic = RLargs.torch_deterministic # Slows down training but ensures reproducibility
+    
+    # Set device for PyTorch; use GPU if available otherwise fallback to CPU
+
+    device = torch.device(RLargs.device)
     print(f"Using device: {device}")
 
-    base_env = MergeExitLaneHighway_Environment()
+    # Initialize environment, agent, and replay buffer    
 
-    env = Wrapper_MergeExitLaneHighway_Environment(base_env) # observation is (n x 12)
+    training_env = MergeExitLaneHighway_Environment()
+    wrapped_training_env = Wrapper_MergeExitLaneHighway_Environment(training_env) # For changing up the observation space
 
-    agent = MASACRL(RLargs, device)
+    raw_viewing_env = MergeExitLaneHighway_Environment(render_mode="rgb_array") # For rendering the environment during training
+    wrapped_viewing_env = Wrapper_MergeExitLaneHighway_Environment(raw_viewing_env) # For changing up the observation space
+    viewing_env = RecordVideo(
+                    wrapped_viewing_env, 
+                    video_folder=os.path.join(save_dir, "checkpoint_videos"), 
+                    episode_trigger=lambda episode_id: True, 
+                    name_prefix=f"checkpoint"
+                )
 
-    rb = MultiAgentReplayBuffer(RLargs.buffer_size, RLargs.num_agents, RLargs.obs_dim, RLargs.action_dim, device)
+
+    agent = MASACRL(RLargs) # The learning agent
+
+    rb = MultiAgentReplayBuffer(RLargs) # The replay buffer for storing transitions
+
+    # Start training loop
     
     start_time = time.time()
-    obs, _ = env.reset(seed=RLargs.seed) # already flattened observation matrix
+
+    flat_obs, _ = wrapped_training_env.reset(seed=RLargs.seed) # already flattened observation matrix
+
+    try:
     
-    for global_step in range(RLargs.total_timesteps):
+        for global_step in range(RLargs.total_timesteps):
 
-        if global_step < RLargs.learning_starts:
-            actions = np.random.uniform(-1, 1, (RLargs.num_agents, RLargs.action_dim))
-        else:
-            actions = agent.get_action(obs)     # actor input / obs is (n x 12), actor output / action is (n x 2)
+            # If still in the initial exploration phase, take random actions, otherwise use agent's prepared policy
 
-        # ENVIRONMENT STEP
-        next_obs, reward, done, truncated, info = env.step(actions)     # fed (n x 2), outputs (n x 12) next_obs
-        
-        # STORE TRANSITION
-        rb.add(obs, actions, reward, next_obs, done)
-        obs = next_obs if not (done or truncated) else env.reset()[0]
+            if global_step < RLargs.learning_starts:
+                actions = np.random.uniform(-1, 1, (RLargs.num_agents, RLargs.action_dim))
+            else:
+                actions = agent.get_action(flat_obs)
 
-        # TRAINING
-        if global_step > RLargs.learning_starts:
-            data = rb.sample(RLargs.batch_size)
-            # data is composed of 5 tensors: observations, action, reward, next observations, done
+            # ENV STEP: Take next step in environment using chosen actions
+
+            next_flat_obs, reward, done, truncated, info = wrapped_training_env.step(actions)
             
-            qf_loss_val, actor_loss_val = agent.update(data, global_step)
+            # STORAGE IN BUFFER: Store all these in the buffer for later training
+            
+            rb.add(flat_obs, actions, reward, next_flat_obs, done)
+            flat_obs = next_flat_obs if not (done or truncated) else wrapped_training_env.reset()[0] # Move to next states
+            
+            # TRAINING: Sample buffer and train agent!
 
-            # Logging
-            if global_step % 100 == 0:
-                writer.add_scalar("losses/qf_loss", qf_loss_val, global_step)
-                writer.add_scalar("losses/actor_loss", actor_loss_val, global_step)
-                writer.add_scalar("losses/alpha", agent.alpha, global_step)
-                print(f"Step: {global_step} | SPS: {int(global_step / (time.time() - start_time))}")
+            if global_step > RLargs.learning_starts:
+                data = rb.sample() # data composed of 5 tensors: observations, action, reward, next observations, done
+                
+                qf_loss_val, actor_loss_val = agent.update(data, global_step) # run pipeline using given data
 
-        # SAVING
-        if global_step % (RLargs.total_timesteps/10) == 0:
-            torch.save(agent.actor.state_dict(), os.path.join(save_dir, f"checkpoint_actor_{global_step}.pth"))
-            print(f"Checkpoint at {global_step} saved in {save_dir}")
+                # LOGGING: Logging losses regularly to TensorBoard and console for monitoring training progress
+                if global_step % RLargs.logging_frequency == 0:
+                    writer.add_scalar("losses/qf_loss", qf_loss_val, global_step)
+                    writer.add_scalar("losses/actor_loss", actor_loss_val, global_step)
+                    writer.add_scalar("losses/alpha", agent.alpha, global_step)
+                    print(f"Step: {global_step} | SPS: {int(global_step / (time.time() - start_time))}")
 
-    writer.close()
-    
-    torch.save(agent.actor.state_dict(), os.path.join(save_dir, "actor_final.pth"))
-    torch.save(agent.qf1.state_dict(), os.path.join(save_dir, "criticqf1_final.pth"))
-    torch.save(agent.qf2.state_dict(), os.path.join(save_dir, "criticqf2_final.pth"))
+                    writer.flush() # Ensure that all pending events have been written to disk
 
-    print(f"Final model weights successfully saved in {save_dir}")
+            # SAVING: Save model weights regularly and generate video of current performance
+            if global_step % int(RLargs.total_timesteps/RLargs.checkpoints_num) == 0:
+                
+                torch.save(agent.actor.state_dict(), os.path.join(save_dir, f"checkpoint_actor_{global_step}.pth"))
+                print(f"Checkpoint at {global_step} saved in {save_dir}")
+
+                print(f"Generating video for checkpoint at {global_step}...")
+
+                viewing_env.name_prefix = f"checkpoint_{global_step}"
+
+                obs, _ = viewing_env.reset(seed=RLargs.seed)
+                done = truncated = False
+
+                while not (done or truncated):
+                    action = agent.get_action(obs)
+                    obs, reward, done, truncated, info = viewing_env.step(action)
+                    viewing_env.render()
+
+                print(f"Checkpoint video for {global_step} saved in {os.path.join(save_dir, 'checkpoint_videos')}")
+
+        torch.save(agent.actor.state_dict(), os.path.join(save_dir, "actor_final.pth"))
+        torch.save(agent.qf1.state_dict(), os.path.join(save_dir, "criticqf1_final.pth"))
+        torch.save(agent.qf2.state_dict(), os.path.join(save_dir, "criticqf2_final.pth"))
+
+        print(f"Final model weights successfully saved in {save_dir}")
+
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user. Saving current model weights...")
+
+        torch.save(agent.actor.state_dict(), os.path.join(save_dir, "actor_interrupted.pth"))
+        torch.save(agent.qf1.state_dict(), os.path.join(save_dir, "criticqf1_interrupted.pth"))
+        torch.save(agent.qf2.state_dict(), os.path.join(save_dir, "criticqf2_interrupted.pth"))
+
+        print(f"Interrupted model weights saved in {save_dir}")
+
+    finally:
+        
+        writer.close()
+        wrapped_training_env.close()
+        viewing_env.close()
