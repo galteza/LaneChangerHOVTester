@@ -166,7 +166,7 @@ class MASACRL():
         self.autotune = rlargs.autotune
         if self.autotune:
             # target entropy is -dim(A) for the whole joint team
-            self.target_entropy = -float(rlargs.num_agents * rlargs.action_dim)
+            self.target_entropy = -float(rlargs.action_dim)
             self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
             self.alpha = self.log_alpha.exp().item()
             self.a_optimizer = optim.Adam([self.log_alpha], lr=rlargs.q_lr)
@@ -183,38 +183,106 @@ class MASACRL():
         return actions_tensor.cpu().numpy()
 
     def update(self, data, global_step):
-        """Runs the entire multi-agent centralized critic optimization pipeline."""
-    
-        flat_joint_obs = data[0].view(self.rlargs.batch_size, -1) # originally (256, n, 6n+5) --> (256, 6n^2 + 5n)
-        flat_joint_next_obs = data[3].view(self.rlargs.batch_size, -1) # originally (256, n, 6n+5) --> (256, 6n^2 + 5n)
-        flat_joint_actions = data[1].view(self.rlargs.batch_size, -1) # originally (256, n, 2) --> (256, 2n)
+        """
+        The critic pipeline is to be run 10 times, once for each agent.
+        Observation is created for each agent, arranged such that self observations come first, then other agents's observations, and then everyone's actions.
+        The critic is then run on this joint observation and joint action, and the Q-value is returned for that agent.
+
+        The actor pipeline is to be run 10 times 
         
-        per_agent_rewards = data[2].view(self.rlargs.batch_size, self.rlargs.num_agents) # originally (256, n, 1) --> (256, n)
-        joint_done = data[4].any(dim=1, keepdim=True).float()
+        """
+
+        joint_obs = data[0] # originally (256, n, 6n+5)
+        joint_actions = data[1] # originally (256, n, 2)
+        joint_rewards = data[2] # originally (256, n, 1)
+        joint_next_obs = data[3] # originally (256, n, 6n+5)
+        joint_done = data[4].any(dim=1, keepdim=True).float() # originally (256, 1)
+        
+        per_agent_rewards = joint_rewards.view(self.rlargs.batch_size, -1) # originally (256, n, 1) --> (256, n)
 
         # =====================================================================
         # CRITIC UPDATE
         # =====================================================================
+
+        # Grab the next observations and run them through actor to get next actions and log probabilities for next state
+
         with torch.no_grad():
 
-            flat_next_obs_for_actor = data[3].view(-1, self.rlargs.obs_dim) # originally (256, n, 6n+5) --> (256*n, 6n+5)
+            flat_next_obs_for_actor = joint_next_obs.view(-1, self.rlargs.obs_dim) # originally (256, n, 6n+5) --> (256*n, 6n+5)
             next_state_actions_flat, next_state_log_pi_flat, _ = self.actor.get_action(flat_next_obs_for_actor) # action, log_prob, mean
-            
-            next_state_actions_joint = next_state_actions_flat.view(self.rlargs.batch_size, -1) # originally (256*n, 2) --> (256, 2n)
-            next_state_log_pi_per_agent = next_state_log_pi_flat.view(self.rlargs.batch_size, self.rlargs.num_agents) # originally (256*n, 1) --> (256, n)
-            
-            # Update target networks, compute the min of the two critics, and get next Q-values from target networks 
-            qf1_next_target = self.qf1_target(flat_joint_next_obs, next_state_actions_joint)
-            qf2_next_target = self.qf2_target(flat_joint_next_obs, next_state_actions_joint)
-            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi_per_agent
-            
-            next_q_value = per_agent_rewards + (1 - joint_done) * self.rlargs.gamma * min_qf_next_target
 
-        qf1_a_values = self.qf1(flat_joint_obs, flat_joint_actions)
-        qf2_a_values = self.qf2(flat_joint_obs, flat_joint_actions)
+        # Flatten the joint actions for use in critic evaluation
+
+            next_actions_reshaped = next_state_actions_flat.view(self.rlargs.batch_size, self.rlargs.num_agents, -1) # originally (256*n, 2) --> (256, n, 2)
+            next_log_pi_reshaped = next_state_log_pi_flat.view(self.rlargs.batch_size, self.rlargs.num_agents, 1) # originally (256*n, 1) --> (256, n, 1)
+
+        # Premake the inputs into critic network for each agent prior to passing through the network!
+        # Create list to store those inputs
+
+        all_agent_obs = []
+        all_agent_next_obs = []
+        all_agent_actions = []
+        all_agent_next_actions = []
+        all_agents_rewards = []
+        all_agents_log_pi = []
+
+        for agent_idx in range(self.rlargs.num_agents):
+
+            # Isolate info for agent in question
+
+            self_obs = joint_obs[:, agent_idx, :] # (256, 6n+5)
+            self_next_obs = joint_next_obs[:, agent_idx, :] # (256, 6n+5)
+            self_actions = joint_actions[:, agent_idx, :] # (256, 2)
+            self_next_actions = next_actions_reshaped[:, agent_idx, :] # (256, 2)
+
+            # Remove questioned agent's observation from the joint observation
+
+            other_obs = torch.cat([joint_obs[:, i, :] for i in range(self.rlargs.num_agents) if i != agent_idx], dim=1) # (256, (n-1)*(6n+5))
+            other_next_obs = torch.cat([joint_next_obs[:, i, :] for i in range(self.rlargs.num_agents) if i != agent_idx], dim=1) # (256, (n-1)*(6n+5))
+            other_actions = torch.cat([joint_actions[:, i, :] for i in range(self.rlargs.num_agents) if i != agent_idx], dim=1) # (256, (n-1)*2)
+            other_next_actions = torch.cat([next_actions_reshaped[:, i, :] for i in range(self.rlargs.num_agents) if i != agent_idx], dim=1) # (256, (n-1)*2)
+
+            # Create joint input for this agent --> each one to be fed into the critic
+
+            all_agent_obs.append(torch.cat([self_obs, other_obs], dim=1)) # (256, 6n^2 + 5n)
+            all_agent_next_obs.append(torch.cat([self_next_obs, other_next_obs], dim=1)) # (256, 6n^2 + 5n)
+            all_agent_actions.append(torch.cat([self_actions, other_actions], dim=1)) # (256, 2n)
+            all_agent_next_actions.append(torch.cat([self_next_actions, other_next_actions], dim=1)) # (256, 2n)
+
+            # Grab agent's rewards
+            all_agents_rewards.append(per_agent_rewards[:, agent_idx].unsqueeze(-1)) # (256, 1)
+            all_agents_log_pi.append(next_log_pi_reshaped[:, agent_idx, :]) # (256, 1)
+
+        # Stack vertically and prepare to send to tensor
+
+        batch_obs = torch.cat(all_agent_obs, dim=0) # (256*n, 6n^2 + 5n)
+        batch_next_obs = torch.cat(all_agent_next_obs, dim=0) # (256*n, 6n^2 + 5n)
+        batch_actions = torch.cat(all_agent_actions, dim=0) # (256*n, 2n)
+        batch_next_actions = torch.cat(all_agent_next_actions, dim=0) # (256*n, 2n)
+        batch_rewards = torch.cat(all_agents_rewards, dim=0) # (256*n, 1)
+        batch_log_pi = torch.cat(all_agents_log_pi, dim=0) # (256*n, 1)
+
+        batch_done = joint_done.repeat_interleave(self.rlargs.num_agents, dim=0) # (256*n, 1)
+
+        # UPDATE BASED ON REWARD (Q(r)): Feeding into critic networks to get Q-values for each agent
+
+        with torch.no_grad():
+
+            # Update target networks 
+            qf1_next_target = self.qf1_target(batch_next_obs, batch_next_actions) # (256, 1)
+            qf2_next_target = self.qf2_target(batch_next_obs, batch_next_actions) # (256, 1)
+            
+            # Compute the min of the two critics, and get next Q-values from target networks
+            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * batch_log_pi
+            next_q_value = batch_rewards + (1 - batch_done) * self.rlargs.gamma * min_qf_next_target # (256*n, 1) Each unique experience/perspective gets a Q value
+
+        # Update critic networks by computing the loss between current Q-values and next Q-values
+
+        qf1_a_values = self.qf1(batch_obs, batch_actions) # (256*n, 1)
+        qf2_a_values = self.qf2(batch_obs, batch_actions) # (256*n, 1)
         
-        qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-        qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+        qf1_loss = F.mse_loss(qf1_a_values, next_q_value) # (256*n, 1)
+        qf2_loss = F.mse_loss(qf2_a_values, next_q_value) # (256*n, 1)
         qf_loss = qf1_loss + qf2_loss
 
         self.q_optimizer.zero_grad()
@@ -228,37 +296,48 @@ class MASACRL():
         if global_step % self.rlargs.policy_frequency == 0:
             for _ in range(self.rlargs.policy_frequency):
 
-                # Route current states through the actor
+                # Grab the desired actions based on the current actor policy
+                # Returned is the action, log probability of that action, and the mean of the action distribution
 
-                flat_obs_for_actor = data[0].view(-1, self.rlargs.obs_dim)
-                pi_flat, log_pi_flat, _ = self.actor.get_action(flat_obs_for_actor)
-                
-                # Reconstruct joint action and joint log_pi
+                flat_obs_for_actor = joint_obs.view(-1, self.rlargs.obs_dim) # originally (256, n, 6n+5) --> (256*n, 6n+5)
+                pi_flat, log_pi_flat, _ = self.actor.get_action(flat_obs_for_actor) # originally (256*n, 2), (256*n, 1), (256*n, 2)
 
-                pi_joint = pi_flat.view(self.rlargs.batch_size, -1)
-                log_pi_joint = log_pi_flat.view(self.rlargs.batch_size, self.rlargs.num_agents, 1).sum(dim=1)
+                # Have actions be separated per agent per episode
                 
-                # Centralize critic evaluates new joint action
+                pi_reshaped = pi_flat.view(self.rlargs.batch_size, self.rlargs.num_agents, -1) # originally (256*n, 2) --> (256, n, 2)
+                
+                # Build critic input space per agent using their desired actions 
 
-                qf1_pi = self.qf1(flat_joint_obs, pi_joint)
-                qf2_pi = self.qf2(flat_joint_obs, pi_joint)
-                min_qf_pi = torch.min(qf1_pi, qf2_pi).sum(dim=1, keepdim=True) # sum over agents to get joint Q-value
+                all_agents_pi = []
+
+                for agent_idx in range(self.rlargs.num_agents):
+                    self_pi = pi_reshaped[:, agent_idx, :] # (256, 2)
+                    other_pi = torch.cat([pi_reshaped[:, i, :] for i in range(self.rlargs.num_agents) if i != agent_idx], dim=1) # (256, (n-1)*2)
+                    all_agents_pi.append(torch.cat([self_pi, other_pi], dim=1)) # (256, 2n)
+
+                batch_pi_actions = torch.cat(all_agents_pi, dim=0) # (256*n, 2n)
                 
-                actor_loss = ((self.alpha * log_pi_joint) - min_qf_pi).mean()
-                actor_loss_val = actor_loss.item()
+                # Critic evaluates the desired actions
+
+                qf1_pi = self.qf1(batch_obs, batch_pi_actions) # (256*n, 1) from (256*n, 6n^2 + 5n) and (256*n, 2n)
+                qf2_pi = self.qf2(batch_obs, batch_pi_actions) # (256*n, 1) from (256*n, 6n^2 + 5n) and (256*n, 2n)
+                min_qf_pi = torch.min(qf1_pi, qf2_pi) # (256*n, 1)
+                
+                # Calculate the actor loss (direction of policy improvement) using the min Q-value and the log probability of the action, scaled by alpha
+
+                actor_loss = ((self.alpha * log_pi_flat) - min_qf_pi).mean() # (256*n, 1) --> scalar
 
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
                 self.actor_optimizer.step()
 
-                # Alpha update
+                # Updating alpha (temperature parameter) if autotune is enabled, using the log probability of the action and the target entropy
 
                 if self.autotune:
                     with torch.no_grad():
                         _, log_pi_flat, _ = self.actor.get_action(flat_obs_for_actor)
-                        log_pi_joint = log_pi_flat.view(self.rlargs.batch_size, self.rlargs.num_agents, 1).sum(dim=1)
                     
-                    alpha_loss = (-self.log_alpha.exp() * (log_pi_joint + self.target_entropy)).mean()
+                    alpha_loss = (-self.log_alpha.exp() * (log_pi_flat + self.target_entropy)).mean()
 
                     self.a_optimizer.zero_grad()
                     alpha_loss.backward()

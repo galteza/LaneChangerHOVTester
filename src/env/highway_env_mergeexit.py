@@ -267,8 +267,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         # Calculating absolute position of lane boundaries
 
-        left_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], min_index)).position(longitudinal=current_position[0], lateral=0) + np.array([0, lane_width_m / 2])
-        right_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], max_index)).position(longitudinal=current_position[0], lateral=0) - np.array([0, lane_width_m / 2])
+        left_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], min_index)).position(longitudinal=current_position[0], lateral=0) - np.array([0, lane_width_m / 2])
+        right_boundary = self.road.network.get_lane((current_segment[0], current_segment[1], max_index)).position(longitudinal=current_position[0], lateral=0) + np.array([0, lane_width_m / 2])
         
         return left_boundary, right_boundary
     
