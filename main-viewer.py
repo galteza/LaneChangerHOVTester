@@ -2,6 +2,8 @@ import gymnasium as gym
 import torch
 import time
 import os
+import re
+from pathlib import Path
 
 from src.agents.platoon_masac import MASACRL
 from src.env.highway_env_mergeexit import MergeExitLaneHighway_Environment, Wrapper_MergeExitLaneHighway_Environment
@@ -22,11 +24,37 @@ if __name__ == "__main__":
     # 3. Initialize Model Architecture
     print("Initializing MASACRL architecture...")
     args = RLArgs() # Uncomment and set this up so your class gets its parameters
-    model = MASACRL(args, device) 
+    model = MASACRL(args) 
 
-    # 4. Define Paths to your specific .pth files
-    run_dir = "/home/gabrielalteza/LaneChangerHOVTester/runs/merge_exit_highway__configs__1__1781686594"
-    actor_path = os.path.join(run_dir, "actor_final.pth")
+    # 4. Find the newest run directory and pick the best available actor checkpoint
+    runs_root = Path(__file__).resolve().parent / "runs"
+    run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
+    if not run_dirs:
+        raise FileNotFoundError(f"No run directories found in {runs_root}")
+
+    run_dir = max(run_dirs, key=lambda path: path.stat().st_mtime)
+    actor_final_path = run_dir / "actor_final.pth"
+    actor_interrupted_path = run_dir / "actor_interrupted.pth"
+    checkpoint_candidates = list(run_dir.glob("checkpoint_actor_*.pth"))
+    latest_checkpoint = None
+    if checkpoint_candidates:
+        def _checkpoint_step(path: Path) -> int:
+            match = re.search(r"checkpoint_actor_(\d+)\.pth$", path.name)
+            return int(match.group(1)) if match else -1
+
+        latest_checkpoint = max(checkpoint_candidates, key=_checkpoint_step)
+
+    if actor_final_path.exists():
+        actor_path = actor_final_path
+    elif actor_interrupted_path.exists():
+        actor_path = actor_interrupted_path
+    elif latest_checkpoint is not None:
+        actor_path = latest_checkpoint
+    else:
+        raise FileNotFoundError(
+            f"No actor checkpoint found in {run_dir}. Expected `actor_final.pth`, `actor_interrupted.pth`, or `checkpoint_actor_<step>.pth`."
+        )
+
     # You only strictly need the actor for rendering, but you can load critics if you want to log Q-values!
     
     # 5. Load the trained weights into your custom actor

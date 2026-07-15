@@ -14,6 +14,20 @@ from src.env.risk_calculators import PolygonTTCCalculator
 
 from configs.configs import EnvArgs, RLArgs
 
+MAX_TTC_SECONDS = 30.0
+MIN_TTC_SECONDS = 1e-3
+
+
+def _safe_ttc(ttc: float, max_ttc: float = MAX_TTC_SECONDS) -> float:
+    if not np.isfinite(ttc):
+        return max_ttc
+    return float(np.clip(ttc, 0.0, max_ttc))
+
+
+def _safe_inverse_ttc(ttc: float, max_ttc: float = MAX_TTC_SECONDS, min_ttc: float = MIN_TTC_SECONDS) -> float:
+    safe_ttc = _safe_ttc(ttc, max_ttc=max_ttc)
+    return 1.0 / max(safe_ttc, min_ttc)
+
 class MergeExitLaneHighway_Environment(AbstractEnv):
     """
     A customized multi-lane highway environment with an on-ramp and and an exit ramp.
@@ -301,6 +315,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             route = [("j", "k", 0),("k","b", 0),("b","c",0),("c","d",0),("d","e",0),("e","l",0),("l","m",0)]
         )
 
+        self.observer_vehicle = self.ego # The vehicle that the environment observes for reward calculation
+
         self.road.vehicles.append(self.ego)
 
         # ADVERSARIAL VEHICLES: 2 per lane, controlled by MDP + MASAC-RL. The goal is to maximize risk between ego and adversaries, while minimizing risk between adversaries.
@@ -397,28 +413,28 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             # Don't endanger other team mates!
             for j, other_adv in enumerate(adversaries):
                 if i == j: continue
-                adv_adv_ttc = PolygonTTCCalculator.compute_ttc(adv, other_adv)
+                adv_adv_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, other_adv))
 
                 if 0.0 <= adv_adv_ttc < 1.0: # REALLY high risk of fratricide
                     adv_reward -= 15.0
                 elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
-                    adv_reward -= 8.0 / adv_adv_ttc # [2, 8]
+                    adv_reward -= 8.0 * _safe_inverse_ttc(adv_adv_ttc) # [2, 8]
                 elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
                     adv_reward -= adv_adv_ttc / 1.5 # [1, inf]
             
             # Bully the ego!
-            adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
+            adv_ego_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, ego))
 
             if not is_release_phase: # Still trying to block on the highway
                 if 0.0 <= adv_ego_ttc < 1.0: # Okay uhh, too much
                     adv_reward -= 30.0
                 elif 1.0 <= adv_ego_ttc <= 4.0: # Cool, try to keep it like this
-                    adv_reward += 4.0 / adv_ego_ttc # [1, 4]
+                    adv_reward += 4.0 * _safe_inverse_ttc(adv_ego_ttc) # [1, 4]
                 elif adv_ego_ttc > 4.0: # Too safe, get closer to ego!
                     adv_reward -= adv_ego_ttc / 4.0 # [1, inf]
             else: # Release phase, let ego go!
                 if 0.0 <= adv_ego_ttc <= 4.0: # OkaaaYYY you really gotta back off now 
-                    adv_reward -= 4.0 / adv_ego_ttc # [1, 4]
+                    adv_reward -= 4.0 * _safe_inverse_ttc(adv_ego_ttc) # [1, 4]
 
             # Consolidate rewards
 
@@ -476,18 +492,10 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         # Crash if driving out of bounds (off the road)
         for vehicle in self.road.vehicles:
-            if self._is_out_of_bounds(vehicle):
+            if self._is_out_of_bounds(vehicle) and vehicle in self.controlled_vehicles:
                 
                 vehicle.crashed = True
-
-                # Penalize adversary for crashing
-                
-                if vehicle in self.controlled_vehicles:
-                    self.config["adv_crash_penalization"][self.controlled_vehicles.index(vehicle)] = True
-
-        # Foolproof crashing of ego if it drives off the road (shouldn't happen with IDM + MOBIL, but just in case)
-        if self._is_out_of_bounds(self.ego):
-            self.ego.crashed = True
+                self.config["adv_crash_penalization"][self.controlled_vehicles.index(vehicle)] = True
 
         # Grab new observations, rewards, and termination/truncation flags
 
@@ -606,7 +614,7 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                 v_x, v_y = victim.position
                 v_vx, v_vy = victim.velocity
                 
-                ttc = PolygonTTCCalculator.compute_ttc(self_veh, victim)
+                ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, victim))
                 
                 victim_obs = np.array([
                     1.0, # Victim presence
@@ -627,7 +635,7 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                 o_x, o_y = other_veh.position
                 o_vx, o_vy = other_veh.velocity
                 
-                ttc = PolygonTTCCalculator.compute_ttc(self_veh, other_veh)
+                ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, other_veh))
                 distance = np.hypot(o_x - self_x, o_y - self_y)
                 
                 feat = np.array([

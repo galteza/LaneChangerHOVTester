@@ -63,6 +63,9 @@ if __name__ == "__main__":
                     name_prefix=f"checkpoint"
                 )
 
+    # Setting camera focus to be LC
+    unwrapped_viewing_env = viewing_env.unwrapped
+    unwrapped_viewing_env.observation_type.observer_vehicle = unwrapped_viewing_env.ego 
 
     agent = MASACRL(RLargs) # The learning agent
 
@@ -117,18 +120,21 @@ if __name__ == "__main__":
                 print(f"Checkpoint at {global_step} saved in {save_dir}")
 
                 print(f"Generating video for checkpoint at {global_step}...")
+                try:
+                    viewing_env.name_prefix = f"checkpoint_{global_step}"
 
-                viewing_env.name_prefix = f"checkpoint_{global_step}"
+                    obs, _ = viewing_env.reset(seed=RLargs.seed)
+                    done = truncated = False
 
-                obs, _ = viewing_env.reset(seed=RLargs.seed)
-                done = truncated = False
+                    while not (done or truncated):
+                        action = agent.get_action(obs)
+                        obs, reward, done, truncated, info = viewing_env.step(action)
+                        viewing_env.render()
 
-                while not (done or truncated):
-                    action = agent.get_action(obs)
-                    obs, reward, done, truncated, info = viewing_env.step(action)
-                    viewing_env.render()
-
-                print(f"Checkpoint video for {global_step} saved in {os.path.join(save_dir, 'checkpoint_videos')}")
+                    print(f"Checkpoint video for {global_step} saved in {os.path.join(save_dir, 'checkpoint_videos')}")
+                except Exception as video_error:
+                    print(f"Checkpoint video skipped at step {global_step}: {video_error}")
+                    print("Training will continue without interrupting the run.")
 
         torch.save(agent.actor.state_dict(), os.path.join(save_dir, "actor_final.pth"))
         torch.save(agent.qf1.state_dict(), os.path.join(save_dir, "criticqf1_final.pth"))

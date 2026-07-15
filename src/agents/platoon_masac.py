@@ -287,6 +287,9 @@ class MASACRL():
 
         self.q_optimizer.zero_grad()
         qf_loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(list(self.qf1.parameters()) + list(self.qf2.parameters()), 1.0) # Clip gradients to prevent exploding gradients
+
         self.q_optimizer.step()
 
         # =====================================================================
@@ -326,9 +329,13 @@ class MASACRL():
                 # Calculate the actor loss (direction of policy improvement) using the min Q-value and the log probability of the action, scaled by alpha
 
                 actor_loss = ((self.alpha * log_pi_flat) - min_qf_pi).mean() # (256*n, 1) --> scalar
+                actor_loss_val = actor_loss.item()
 
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0) # Clip gradients to prevent exploding gradients
+
                 self.actor_optimizer.step()
 
                 # Updating alpha (temperature parameter) if autotune is enabled, using the log probability of the action and the target entropy
@@ -341,7 +348,14 @@ class MASACRL():
 
                     self.a_optimizer.zero_grad()
                     alpha_loss.backward()
+
+                    torch.nn.utils.clip_grad_norm_([self.log_alpha], 1.0) # Clip gradients to prevent exploding gradients
+
                     self.a_optimizer.step()
+
+                    with torch.no_grad():
+                        self.log_alpha.clamp_(min=-10, max=2) # Clamp log_alpha to prevent extreme values
+
                     self.alpha = self.log_alpha.exp().item()
 
         # =====================================================================

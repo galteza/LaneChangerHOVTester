@@ -20,7 +20,7 @@ class EnvObsConfigArgs:
     type: str = "Kinematics"
     normalize: bool = False
     absolute: bool = True
-    vehicles_count: int = 11 # 1 System Under Test (SUT) + 10 Adversaries
+    vehicles_count: int = 5 # 1 System Under Test (SUT) + 10 Adversaries
     features: List[str] = field(
         default_factory=lambda: ["presence", "x", "y", "vx", "vy", "heading"]
     )
@@ -52,7 +52,7 @@ class EnvArgs:
 
     env_id: str = "merge_exit_highway"
     render_mode: Optional[str] = None
-    lanes_count: int = 5
+    lanes_count: int = 0 # post init
     lane_width_m: int = 4
     # Establishing lengths of each physical section
     ends_m: List[int] = field(default_factory=lambda: [150, 80, 80, 300, 80, 80, 150])
@@ -86,7 +86,7 @@ class EnvArgs:
 
     def __post_init__(self):
         self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1 # 1 System Under Test (SUT) + 10 Adversaries     
-    
+        self.lanes_count = int(self.observation.observation_config.vehicles_count / 2) # 1 SUT + 10 Adversaries
 
 
 
@@ -111,7 +111,7 @@ class RLArgs:
     action_dim: int = 2  # Throttle, Steering
     
     total_timesteps: int = 1000000
-    buffer_size: int = int(1e6)
+    buffer_size: int = 500 # int(1e6)
     gamma: float = 0.99
     tau: float = 0.005
     batch_size: int = 256
@@ -123,7 +123,7 @@ class RLArgs:
     alpha: float = 0.2
     autotune: bool = True
 
-    checkpoints_num: int = 10
+    checkpoints_num: int = 100
     logging_frequency: int = 100
 
     def __post_init__(self):
