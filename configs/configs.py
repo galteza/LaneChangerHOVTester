@@ -45,6 +45,9 @@ class EnvRewardArgs:
 
     adv_crash_penalty: float = -600.0
 
+    adv_boundary_penalty: float = -50.0
+    adv_boundary_k: float = 20.0
+
     # Adversary-to-Adversary TTC Penalties
 
     adv_adv_ttc_close_penalty: float = -50.0

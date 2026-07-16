@@ -403,20 +403,30 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             if adv.crashed and not self.config["adv_crash_penalization"][i]:
                 adv_reward += reward_args["adv_crash_penalty"] # Penalty for bad driving leading to crash 
 
+            # If adversary driving too close to boundary
+
+            left_boundary, right_boundary = self._get_current_lateral_boundaries(adv)
+
+            # model a parabola maximum at the center of the lane, with a minimum at the boundaries, to penalize driving too close to the boundaries
+            adv_reward += -((adv.position[1] - (left_boundary[1] + right_boundary[1]) / 2) ** 2) + reward_args["adv_boundary_k"] # Penalty for driving too close to boundary
+
+            if left_boundary[1] + VEHICLE_WIDTH / 2 > adv.position[1] or right_boundary[1] - VEHICLE_WIDTH / 2 < adv.position[1]:
+                adv_reward += reward_args["adv_boundary_penalty"] # Penalty for driving too close to boundary
+
             # Don't endanger other team mates!
             for j, other_adv in enumerate(adversaries):
                 if i == j: continue
-                adv_adv_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, other_adv))
+                adv_adv_ttc = PolygonTTCCalculator.compute_ttc(adv, other_adv)
 
                 if 0.0 <= adv_adv_ttc < 1.0: # REALLY high risk of fratricide
                     adv_reward += reward_args["adv_adv_ttc_close_penalty"] # [-50]
                 elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
-                    adv_reward += reward_args["adv_adv_ttc_near_m"] * _safe_inverse_ttc(adv_adv_ttc) ** 1/2 + reward_args["adv_adv_ttc_near_b"] # [-50, -20]
+                    adv_reward += reward_args["adv_adv_ttc_near_m"] * (1/adv_adv_ttc) ** 1/2 + reward_args["adv_adv_ttc_near_b"] # [-50, -20]
                 elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
-                    adv_reward += reward_args["adv_adv_ttc_far_m"] * adv_adv_ttc + reward_args["adv_adv_ttc_far_b"] # [-20, -60]
+                    adv_reward += reward_args["adv_adv_ttc_far_m"] * (1/adv_adv_ttc) + reward_args["adv_adv_ttc_far_b"] # [-20, -60]
             
             # Bully the ego!
-            adv_ego_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, ego))
+            adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
 
             if not is_release_phase: # Still trying to block on the highway
                 if 0.0 <= adv_ego_ttc < 1.0: # Okay uhh, too much
@@ -424,7 +434,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 elif 1.0 <= adv_ego_ttc <= 4.0: # Cool, try to keep it like this
                     adv_reward += reward_args["adv_ego_ttc_near_a"] * (adv_ego_ttc - reward_args["adv_ego_ttc_near_h"])**2 + reward_args["adv_ego_ttc_near_k"] # [-50, 20, -10]
                 elif adv_ego_ttc > 4.0: # Too safe, get closer to ego!
-                    adv_reward += reward_args["adv_ego_ttc_far_m"] * adv_ego_ttc + reward_args["adv_ego_ttc_far_b"]  # [-10, -60]
+                    adv_reward += reward_args["adv_ego_ttc_far_m"] * (1/adv_ego_ttc) + reward_args["adv_ego_ttc_far_b"]  # [-10, -60]
             else: # Release phase, let ego go!
                 if 0.0 <= adv_ego_ttc <= 4.0: # OkaaaYYY you really gotta back off now 
                     adv_reward += reward_args["adv_release_phase_m"] * adv_ego_ttc + reward_args["adv_release_phase_b"] # [-70, -20]
@@ -647,8 +657,6 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
 
             # ===== VICTIM OBSERVATION =====
             victim_obs = np.zeros(5, dtype=np.float32)
-                
-            ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, victim))
             
             victim_obs = np.array([
                 (target_long_dist - victim_x) / target_long_dist,
@@ -668,7 +676,6 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                 o_x, o_y = other_veh.position
                 o_vx, o_vy = other_veh.velocity
                 
-                ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, other_veh))
                 distance = np.hypot(o_x - self_x, o_y - self_y)
                 
                 if other_veh.crashed:
