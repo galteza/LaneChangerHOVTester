@@ -23,7 +23,7 @@ class EnvObsConfigArgs:
     type: str = "Kinematics"
     normalize: bool = False
     absolute: bool = True
-    vehicles_count: int = 5 # 1 System Under Test (SUT) + 10 Adversaries
+    vehicles_count: int = 3 # 1 System Under Test (SUT) + 10 Adversaries
     features: List[str] = field(
         default_factory=lambda: ["presence", "x", "y", "vx", "vy", "heading"]
     )
@@ -43,7 +43,7 @@ class EnvRewardArgs:
 
     # Penalties and rewards
 
-    adv_crash_penalty: float = -100.0
+    adv_crash_penalty: float = -600.0
 
     # Adversary-to-Adversary TTC Penalties
 
@@ -52,7 +52,8 @@ class EnvRewardArgs:
     adv_adv_ttc_near_m: float = -60.0
     adv_adv_ttc_near_b: float = 10.0
 
-    adv_adv_ttc_far_multiplier: float = -5.0
+    adv_adv_ttc_far_m: float = -2.0
+    adv_adv_ttc_far_b: float = 24.0
 
     # Adversary-to-Ego TTC Penalties
 
@@ -60,7 +61,7 @@ class EnvRewardArgs:
 
     adv_ego_ttc_near_a: float = -20.8
     adv_ego_ttc_near_h: float = 2.8
-    adv_ego_ttc_near_k: float = 50.0
+    adv_ego_ttc_near_k: float = 100.0
 
     adv_ego_ttc_far_m: float = -6.25
     adv_ego_ttc_far_b: float = 15.0
@@ -68,7 +69,7 @@ class EnvRewardArgs:
     adv_release_phase_m: float = 12.5
     adv_release_phase_b: float = -70.0
 
-    ego_crash_penalty: float = -500.0
+    ego_crash_penalty: float = -1000.0
     ego_reach_exit_reward: float = 800.0
 
 @dataclass
@@ -84,7 +85,7 @@ class EnvArgs:
 
     env_id: str = "merge_exit_highway"
     render_mode: Optional[str] = None
-    lanes_count: int = 0 # post init
+    lanes_count: int = 2
     lane_width_m: int = 4
     # Establishing lengths of each physical section
     ends_m: List[int] = field(default_factory=lambda: [150, 80, 80, 300, 80, 80, 150])
@@ -117,9 +118,7 @@ class EnvArgs:
     policy_frequency: int = 10        # How often MPC is called
 
     def __post_init__(self):
-        self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1 # 1 System Under Test (SUT) + 10 Adversaries     
-        self.lanes_count = int(self.observation.observation_config.vehicles_count / 2) # 1 SUT + 10 Adversaries
-
+        self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1
 
 
 @dataclass
@@ -139,7 +138,6 @@ class RLArgs:
     env_id: str = "merge_exit_highway"
     num_agents: int = 0 # to be defined post init
     obs_dim: int = 0 # to be defined post init
-    feature_dim: int = 6 # presence, x, y, speed, "heading", 2D TTC
     action_dim: int = 2  # Throttle, Steering
     
     total_timesteps: int = 1000000
@@ -160,7 +158,7 @@ class RLArgs:
 
     def __post_init__(self):
         self.num_agents = self.env.controlled_vehicles
-        self.obs_dim = self.num_agents * self.feature_dim + (self.feature_dim - 1)
+        self.obs_dim = 7 + 5 + (self.num_agents - 1) * 6 # 7 for main adv, 5 for ego, 6 for each other adv
 
 
 @dataclass

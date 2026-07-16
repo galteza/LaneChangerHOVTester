@@ -17,17 +17,10 @@ from configs.configs import EnvArgs, RLArgs
 
 MAX_TTC_SECONDS = 12.0
 MIN_TTC_SECONDS = 1e-3
+VEHICLE_WIDTH = Vehicle.WIDTH
+MAX_SPEED = Vehicle.MAX_SPEED
+MIN_SPEED = Vehicle.MIN_SPEED
 
-
-def _safe_ttc(ttc: float, max_ttc: float = MAX_TTC_SECONDS) -> float:
-    if not np.isfinite(ttc):
-        return max_ttc
-    return float(np.clip(ttc, 0.0, max_ttc))
-
-
-def _safe_inverse_ttc(ttc: float, max_ttc: float = MAX_TTC_SECONDS, min_ttc: float = MIN_TTC_SECONDS) -> float:
-    safe_ttc = _safe_ttc(ttc, max_ttc=max_ttc)
-    return 1.0 / max(safe_ttc, min_ttc)
 
 class MergeExitLaneHighway_Environment(AbstractEnv):
     """
@@ -303,6 +296,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
     
     def _make_vehicles(self) -> None:
 
+        num_adv = self.config["controlled_vehicles"]
+
         self.controlled_vehicles = []
 
         # LANE CHANGER: Spawns on the on-ramp and is controlled by IDM + MOBIL. The goal is to reach the exit ramp successfully.
@@ -320,23 +315,20 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         self.road.vehicles.append(self.ego)
 
-        # ADVERSARIAL VEHICLES: 2 per lane, controlled by MDP + MASAC-RL. The goal is to maximize risk between ego and adversaries, while minimizing risk between adversaries.
-        # Pairs each lane, one situated at 20m in and one at 40m in, with randomized starting velocities between 20 and 30 m/s.
-
+        # ADVERSARIAL VEHICLES: Controlled by MDP + MASAC-RL. The goal is to maximize risk between ego and adversaries, while minimizing risk between adversaries.
+    
         lanes_count = self.config["lanes_count"]
-
-        for lane_idx in range(lanes_count):
-            highway_lane = self.road.network.get_lane(("a", "b", lane_idx))
-            for car_idx in range(2):
-                longitudinal_pos_m = 80 * car_idx
-
-                adv = Vehicle(
-                    self.road,
-                    highway_lane.position(longitudinal_pos_m, 0),
-                    speed = np.random.uniform(25,36)
-                )
-                self.road.vehicles.append(adv)
-                self.controlled_vehicles.append(adv)
+    
+        for i in range(num_adv):
+            highway_lane = self.road.network.get_lane(("a", "b", np.random.randint(0, lanes_count)))
+            longitudinal_pos_m = 40 * i
+            adv = Vehicle(
+                self.road,
+                highway_lane.position(longitudinal_pos_m, 0),
+                speed = np.random.uniform(25,36)
+            )
+            self.road.vehicles.append(adv)
+            self.controlled_vehicles.append(adv)
 
     def _reset(self) -> None:
 
@@ -409,7 +401,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
             # Drive safe!
             if adv.crashed and not self.config["adv_crash_penalization"][i]:
-                adv_reward += reward_args["adv_crash_penalty"] # Penalty for bad driving leading to crash
+                adv_reward += reward_args["adv_crash_penalty"] # Penalty for bad driving leading to crash 
 
             # Don't endanger other team mates!
             for j, other_adv in enumerate(adversaries):
@@ -421,7 +413,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
                     adv_reward += reward_args["adv_adv_ttc_near_m"] * _safe_inverse_ttc(adv_adv_ttc) ** 1/2 + reward_args["adv_adv_ttc_near_b"] # [-50, -20]
                 elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
-                    adv_reward += reward_args["adv_adv_ttc_far_multiplier"] * adv_adv_ttc # [-20, -60]
+                    adv_reward += reward_args["adv_adv_ttc_far_m"] * adv_adv_ttc + reward_args["adv_adv_ttc_far_b"] # [-20, -60]
             
             # Bully the ego!
             adv_ego_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, ego))
@@ -561,10 +553,31 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         Ignores the default 'obs' matrix to prevent floating-point mismatch and sorting bugs.
         Vector shape: [Self (5), Victim (6), Other Advs sorted by distance (n-1 * 6)]
 
-        """
 
-        def _take_magnitude(vx, vy):
-            return np.sqrt(vx**2 + vy**2)
+        NEW IDEA: 
+        (1) Self observation:
+            - activity (0 or 1)
+            - dist. from left boundary (fraction of total width)
+            - dist. from right boundary (fraction of total width)
+            - long. dist. to ego (fraction of total distance to exit)
+            - lat. dist. to ego (fraction of total width)
+            - long. speed (fraction of speed limit)
+            - lat. speed (fraction of speed limit)
+        (2) Victim (ego LC) observation:
+            - long. dist. to exit (fraction of total distance to exit)
+            - lat. dist. to exit (fraction of total width)
+            - rel. long. speed to self (fraction of speed limit)
+            - rel. lat. speed to self (fraction of speed limit)
+            - inverse TTC
+        (3) Other adversaries observation:
+            - activity (0 or 1)
+            - long. dist. to self (fraction of total distance to exit)
+            - lat. dist. to self (fraction of total width)
+            - rel. long. speed to self (fraction of speed limit)
+            - rel. lat. speed to self (fraction of speed limit)
+            - inverse TTC
+
+        """
         
         env = self.env.unwrapped
         
@@ -572,6 +585,15 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
 
         target_long_dist = sum(env.config['ends_m'][:4])
         target_lat_dist = -env.config['lane_width_m']
+
+        # Grab highway geometry
+
+        lane_width_m = env.config['lane_width_m']
+        lanes_count = env.config['lanes_count']
+
+        highway_safe_buffer = lane_width_m - VEHICLE_WIDTH # Adjusting for vehicle width to avoid clipping into lane boundaries
+        lanes_total_width = lane_width_m * lanes_count
+        
         
         # Identify the victim vehicle (actual object)
         
@@ -585,7 +607,7 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
 
         processed_obs = np.zeros((self.adv_agents, self.RLargs.obs_dim), dtype=np.float32)
 
-        # Build all (6n + 5) observations for each of adversaries
+        # Build all each observation space of each adversary
 
         for i in range(self.adv_agents):
             
@@ -597,34 +619,44 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
 
             # Features to be built modularly, first for self, then for victim (lane changer), then for other adversaries, and finally concatenated into one row of the observation matrix
             
-            # ===== SELF OBSERVATION =====
+            
             self_x, self_y = self_veh.position
             self_vx, self_vy = self_veh.velocity
+
+            if victim is not None:
+                victim_x, victim_y = victim.position
+                victim_vx, victim_vy = victim.velocity
+            else:
+                victim_x, victim_y = 0.0, 0.0
+                victim_vx, victim_vy = 0.0, 0.0
             
-            current_adv_obs = np.array([
-                1.0, # Presence
-                (target_long_dist - self_x) / target_long_dist,
-                (self_y - target_lat_dist) / (self.configs.get('lane_width_m', 4) * self.configs.get('num_lanes', 5) - target_lat_dist),
-                _take_magnitude(self_vx, self_vy) / self.configs.get('speed_limit', 20),
-                self_veh.heading / (2 * np.pi) + 0.5
-            ], dtype=np.float32)
+            # ===== SELF OBSERVATION =====
+
+            if self_veh.crashed:
+                continue # Skip crashed adversaries, leaving their observation row as pure zeros
+            else:
+                current_adv_obs = np.array([
+                    1.0,
+                    (self_y - highway_safe_buffer/2) / (lanes_total_width + highway_safe_buffer), # dist to left boundary
+                    (lanes_total_width - (self_y + highway_safe_buffer/2)) / (lanes_total_width + highway_safe_buffer), # dist to right boundary
+                    (victim_x - self_x) / target_long_dist, # long. dist to victim
+                    (victim_y - self_y) / (lanes_total_width + highway_safe_buffer - target_lat_dist), # lat. dist to victim
+                    self_vx / ((MAX_SPEED - MIN_SPEED)/2), # long. speed
+                    self_vy / ((MAX_SPEED - MIN_SPEED)/(2*np.sqrt(2))) # lat. speed
+                ], dtype=np.float32)
 
             # ===== VICTIM OBSERVATION =====
-            victim_obs = np.zeros(6, dtype=np.float32)
-            if victim is not None:
-                v_x, v_y = victim.position
-                v_vx, v_vy = victim.velocity
+            victim_obs = np.zeros(5, dtype=np.float32)
                 
-                ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, victim))
-                
-                victim_obs = np.array([
-                    1.0, # Victim presence
-                    (v_x - self_x) / self.configs.get('rel_dist_normalizer', 20.0),
-                    (v_y - self_y) / self.configs.get('rel_dist_normalizer', 20.0),
-                    _take_magnitude(v_vx - self_vx, v_vy - self_vy) / self.configs.get('speed_limit', 20),
-                    np.arctan2(v_vy - self_vy, v_vx - self_vx) / (2 * np.pi) + 0.5,
-                    np.clip(ttc / self.configs.get('ttc_normalizer', 10.0), 0.0, 1.0)
-                ], dtype=np.float32)
+            ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, victim))
+            
+            victim_obs = np.array([
+                (target_long_dist - victim_x) / target_long_dist,
+                (target_lat_dist - victim_y) / (lanes_total_width - target_lat_dist),
+                (victim_vx - self_vx) / (MAX_SPEED - MIN_SPEED), # rel. long. speed to victim
+                (victim_vy - self_vy) / ((MAX_SPEED - MIN_SPEED)/(2*np.sqrt(2))),
+                1.0 / (PolygonTTCCalculator.compute_ttc(self_veh, victim) + 1.0)
+            ], dtype=np.float32)
 
             # ===== OTHER ADV OBSERVATION =====
             other_advs_list = []
@@ -639,14 +671,17 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                 ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(self_veh, other_veh))
                 distance = np.hypot(o_x - self_x, o_y - self_y)
                 
-                feat = np.array([
-                    1.0, # Presence
-                    (o_x - self_x) / self.configs.get('rel_dist_normalizer', 20.0),
-                    (o_y - self_y) / self.configs.get('rel_dist_normalizer', 20.0),
-                    _take_magnitude(o_vx - self_vx, o_vy - self_vy) / self.configs.get('speed_limit', 20),
-                    np.arctan2(o_vy - self_vy, o_vx - self_vx) / (2 * np.pi) + 0.5,
-                    np.clip(ttc / self.configs.get('ttc_normalizer', 10.0), 0.0, 1.0)
-                ], dtype=np.float32)
+                if other_veh.crashed:
+                    feat = np.zeros(6, dtype=np.float32)
+                else:
+                    feat = np.array([
+                        1.0,
+                        (o_x - self_x) / target_long_dist,
+                        (o_y - self_y) / (lanes_total_width + highway_safe_buffer - target_lat_dist),
+                        (o_vx - self_vx) / ((MAX_SPEED - MIN_SPEED)/2),
+                        (o_vy - self_vy) / ((MAX_SPEED - MIN_SPEED)/(2*np.sqrt(2))),
+                        1.0 / (PolygonTTCCalculator.compute_ttc(self_veh, other_veh) + 1.0)
+                    ], dtype=np.float32)
                 
                 other_advs_list.append((distance, feat))
                 
