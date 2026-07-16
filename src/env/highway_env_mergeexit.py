@@ -9,12 +9,13 @@ from highway_env.road.lane import StraightLane, LineType, SineLane
 
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
+from highway_env.vehicle.kinematics import Vehicle
 
 from src.env.risk_calculators import PolygonTTCCalculator
 
 from configs.configs import EnvArgs, RLArgs
 
-MAX_TTC_SECONDS = 30.0
+MAX_TTC_SECONDS = 12.0
 MIN_TTC_SECONDS = 1e-3
 
 
@@ -329,7 +330,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             for car_idx in range(2):
                 longitudinal_pos_m = 80 * car_idx
 
-                adv = MDPVehicle(
+                adv = Vehicle(
                     self.road,
                     highway_lane.position(longitudinal_pos_m, 0),
                     speed = np.random.uniform(25,36)
@@ -466,7 +467,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                         zones_occupied["left"] = 1
             
             occupied_count = sum(zones_occupied.values())
-            team_reward += occupied_count ** 3 * 1.5
+            team_reward += 20 * (occupied_count ** 2 - 2 ** 2)
 
         # Ego reached goal!!
         if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':

@@ -1,0 +1,299 @@
+% !TeX program = pdflatex
+
+\documentclass[12pt, a4paper]{report}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+
+\graphicspath{{figures/}{assets/}} % Set the path for images
+
+\geometry{top=3cm, bottom=3cm, left=3cm, right=3cm}
+
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+
+
+\title{Risk-critical scenario generation for lane-changing (LC) autonomous driving (AD) task on multi-lane highway, using multi-agent soft actor-critic reinforcement learning (MASAC-RL)​}
+\author{Gabriel Alteza}
+\date{August 2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \begin{center}
+        
+        % --- LOGOS ---
+        % Adjust the height parameter to scale your logos properly
+        \includegraphics[height=1.5cm]{tact_logo.jpg} 
+        \hspace{0.5cm} % Space between left logo and vertical line
+        \includegraphics[height=1.5cm]{nagoya_university_logo.png} 
+        \hspace{0.5cm} % Space between left logo and vertical line
+        \rule{1pt}{1.5cm} % Vertical line
+        \hspace{0.5cm} % Space between vertical line and right logo
+        \includegraphics[height=1.5cm]{suzuki_lab_logo.png}
+        
+        \vspace*{3cm}
+        
+        % --- TITLE ---
+        {\Large \uppercase{Risk-critical scenario generation for lane-changing (LC) autonomous driving (AD) task on multi-lane highway, using multi-agent soft actor-critic reinforcement learning (MASAC-RL)} \\ \uppercase{} \par}
+        
+        \vspace{2cm}
+        
+        % --- AUTHOR INFO ---
+        by
+        
+        \vspace{1.5cm}
+        
+        ALTEZA Gabriel Pascua
+        
+        \vspace{1.25cm}
+        
+        % --- DEPARTMENT & DEGREE INFO ---
+        Department of Mechanical \& Aerospace Engineering \\
+        School of Engineering
+        
+        \vspace{2cm}
+        
+        Degree thesis is submitted for
+        
+        \vspace{1.5cm}
+        
+        % --- SUPERVISORS ---
+        Supervisors:\\
+        Dr. Tatsuya Suzuki \\
+        Dr. Hiroyuki Okuda
+        
+        % \vfill automatically pushes the following content to the bottom of the page
+        \vfill
+        
+        % --- UNIVERSITY & DATE ---
+        Nagoya University \\
+        August, 2026
+        
+    \end{center}
+\end{titlepage}
+
+
+\section{Abstract}
+
+
+
+
+\section{Introduction}
+
+The deployment of autonomous driving technologies into society has been one of the most delayed advancements to the field of autonomous vehicles, especially dealing with human pushback \cite{suzuki2025safety}. As such, researchers and scientists have been working towards developing various methods to test the safety and robustness of autonomous driving (AD) tasks on the road.
+
+One of the least-explored AD task in terms of safety testing is the lane-changing or lane-intrusion AD task in which the vehicle tries to insert itself within a specific gap. Past papers have employed both static methods of evaluating the ability of a vehicle's lane changing, especially with regard to global standards, such as the ISO. However, there remains a huge gap in the available research on dynamic methods wherein obstacles are moving or actively working against the system under test (SUT). As such, this research aims to create a safety verification system for the lane-changing or lane-intrusion task into the gap of a leading-following pair of vehicles. Moreover, this research will test the lane-changing logic's ability to withstand multiple lane changes, coming in from a merging ramp and traversing the highway to reach the preset desired exit ramp situated on the other edge of the highway.
+
+Reinforcement learning, more broadly, machine learning, has been a hot area of research for its efficacy as a research methodology tool in solving problems that are not easily solvable through traditional white-box means. Reinforcement learning, which uses a neural network to learn from repeated simulations within a set environment, learns from its mistakes and successes in order to develop a policy that grows stronger and eventually converges to a robust neural network for the decision-making of an appropriate action to take within the environment under test.
+
+In the field of autonomous driving safety testing, one of the most important parts to research on is the coverage of the tests, namely how diverse the testing scenarios generated are from one another in order to ensure that a wider scope of possible situations are covered. Moreover, rare cases in which risk of crashing is high are difficult to quantify and hard-code manually, while they remain to be the most important to be covered in the overall scope, especially since they are directly linked to human comfortability and safety on the road when the vehicles employing such are eventually deployed on the road.
+
+Hence, this study aims to use specifically a multi-agent soft-actor-critic reinforcement learning framework to control a platoon of moving vehicles and let them learn how to get themselves as close as possible to inducing high risk of crash within the SUT without actually letting it crash. Moreover, the soft-actor-critic portion of this framework aims to maximize the entropy of the discovery of appropriate actions. Rather than outputting one proven action that works, the policy outputs a probability mapping of various non-clusterable actions that all efficiently maximize risk of crash in the SUT. In such way, the coverage of test-case generation is hypothetically increased, and may be evaluated against previous baseline methods for its strength in generating high-risk edge cases for lane-changing and lane-intrusion scenarios on a highway.
+
+\section{Theory}
+
+\subsection{Program Architecture}
+
+The architecture of the file tree is as follows:
+\begin{itemize}
+    \item Global planning of lane-changing SUT
+    \item Safety corridor generation for use of lane-changing SUT
+    \item Longitudinal movement MPC
+    \item Lateral movement MPC
+    \item Platoon MASAC-RL
+\end{itemize}
+
+The lane-changing SUT will be governed by a global planner which includes information on the target position and calculation of urgency for making lane changes (i.e., increases steadily the closer to the exit the SUT gets). In the lane-changing SUT's calculation of trajectory and path-planning as well, it must determine the "safety corridor" or maximum area for plausible intrusion before performing the lane change.
+
+On the other hand, the platoon will be using the previously mentioned MASAC-RL framework in order to instruct where the adversary must head in the next step. The neural network will be constantly under improvement until convergence, the limit of which is to be defined in a later section.
+
+Both the SUT vehicle and each of the platoon vehicles will be using two model predictive control (MPC) that govern the low-level control needed to drive the vehicles to the desired positions. The maneuver is decoupled, hence divided into two parts, namely longitudinal (along the highway) and lateral (across the highway).
+
+\subsection{Kinematic Bicycle Model}
+
+The vehicles all will be modeled using the kinematic bicycle model (KBM). Based on the KBM model, the states and inputs to be considered are as follows.
+
+\begin{equation}
+    \begin{bmatrix}
+        x_{t+1} \\
+        y_{t+1} \\
+        \theta_{t+1} \\
+        v_{t+1} \\
+        \gamma_{t+1} \\
+    \end{bmatrix} =
+    \begin{bmatrix}
+        x_t + \Delta tv_t\cos{\theta_{t}} \\
+        y_t + \Delta tv_t\sin{\theta_{t}} \\
+        \theta_t + \Delta t\frac{v_t}{L_b}\tan(\gamma_t) \\
+        v_t + \Delta ta_t\ \\
+        \gamma_t + \Delta t \omega_t
+    \end{bmatrix}
+\end{equation}
+
+\subsection{Lane-Changing Vehicle}
+
+The pipeline of the lane-change maneuver of the ego vehicle involves the separation of the "if," "when," and "how" frameworks of the maneuver, as developed in \cite{7637091}. The "if" pertains to determining whether or not a lane-change maneuver into the next lane is appropriate. The "when" part aims to determine which gap to intrude into and when to begin the move. Lastly, the "how" pertains to the usage of low-level controllers to execute the maneuver according to the determined appropriate gap.
+
+\subsubsection{LC Global Planner}
+In the LC, the global planner takes care of the "if" part by utilizing lane-utility values that correspond to appropriateness of a move into the said lane. The four utility values in this research are as follows:
+\begin{enumerate}
+    \item Average travel time in the lane
+    \item Average time gap density in the lane
+    \item Remaining travel time in the lane
+    \item Urgency of reaching the lane in achieving end position
+\end{enumerate}
+
+The four equations representing the above normalized lane-utility values $U_{\mathrm{avetravtime}}$, $U_{\mathrm{avetimegap}}$, $U_{\mathrm{remtravtime}}$, $U_{\mathrm{urgency}}$ are detailed as follows:
+\begin{equation}
+    d_{\mathrm{max}} = \beta v_{\mathrm{ref}}
+\end{equation}
+\begin{equation}
+    U_{\mathrm{avetravtime}} = \frac{-\left| \frac{d_{\mathrm{max}}}{v_{\mathrm{ref}}} - \frac{d_{\mathrm{max}}}{\max(\gamma,v_{\mu})} \right|}{\left| \frac{d_{\mathrm{max}}}{v_{\mathrm{ref}}} - \frac{d_{\mathrm{max}}}{\gamma} \right|}
+\end{equation}
+\begin{equation}
+    U_{\mathrm{avetimegap}} = \frac{\min(\alpha t_{\mathrm{gap, desired}}, t_{\mathrm{gap, \mu}})}{\alpha t_{\mathrm{gap, desired}}}
+\end{equation}
+\begin{equation}
+    U_{\mathrm{remtravtime}} = \frac{\frac{\min(d_{\mathrm{max}}, d_{\mathrm{end}})}{v_{\mathrm{ref}}}}{\frac{d_\mathrm{max}}{v_\mathrm{ref}}}
+\end{equation}
+\begin{equation}
+    U_{\mathrm{urgency}} = \exp \left( -\kappa\frac{i_{\mathrm{current}}+1}{n_{\mathrm{lanes}}+1} \cdot \Delta s \right) 
+\end{equation}
+
+The four utility values are then consolidated as seen in Equation \eqref{eq:totalutility}.
+
+\begin{equation} \label{eq:totalutility}
+    U_{\mathrm{total}} = \sum\limits_{i \in A} w_{i}U_{i}
+\end{equation}
+\begin{equation}
+    A = \{\mathrm{avetravtime, avetimegap, remtravtime, urgency}\}
+\end{equation}\
+
+The lane with the highest utility values is then chosen as the target/desired lane, as seen in Equation \eqref{eq: desiredlane}.
+
+\begin{equation} \label{eq: desiredlane}
+    L_{\mathrm{desired}} = \argmax\limits_{l \in L} \left(U_{l}-(1+\zeta|l|)\left|U_0\right|\right)
+\end{equation}
+
+The global planner is then made to choose the best inter-vehicle traffic gap in the desired lane and the time instance in which it shall enact the lane intrusion. To achieve such, a "time-position"-area, is formulated, corresponding to the intersection between the reachable set of the ego car given its dynamical limitations (current velocity, allowed acceleration values, etc.), and the predicted safe lane change region, which is defined as the space that isn't occupied by any vehicle currently and across the prediction horizon.
+
+The "time-position"-areas across the discretized horizon are summed and accumulate into a final "gap utility" value, displayed as $A_g$. The gap with the largest gap utility value, as seen in Equation \eqref{eq: gaputility}, is chosen. 
+
+\begin{equation} \label{eq: gaputility}
+    \begin{split}
+        A_g = \sum\limits^{K}_{k=0}\max\left(0,\min\left(x^{\mathrm{max}}_{E_k},\min\limits_{i \in F_g}(x_{i_k}-[t_{\mathrm{gap,min}}\min(v_{x_{\mathrm{max}}}, v_{x_{i_k}})+d_s])\right) \right. \\
+        \left. -\max\left(x^\mathrm{min}_{E_k},\max\limits_{i \in B_g}(x_{i_k}+[t_{\mathrm{gap,min}}v_{x_{i_k}}+d_s])\right)\right)
+    \end{split}
+\end{equation}
+
+\begin{itemize}
+    \item $t_{\mathrm{gap,min}}$ is the minimum allowed time gap to the chosen vehicle
+    \item $v_{x_{\mathrm{max}}}$ is the maximum allowed velocity for the ego
+    \item $x_{i_k}$ and $v_{x_{i_k}}$ refer to the predicted position and velocity values of the given vehicle, respectively
+    \item $d_s$ is a safe-distance buffer
+    \item $x^{\mathrm{max}}_{E_k}$ and $x^{\mathrm{min}}_{E_k}$ are the highest and lowest reachable longitudinal distances for the ego, respectively
+\end{itemize}
+
+The minimum time (discretized) that it takes for a lane change maneuver must also be accounted for. and must require that the amount of discretized time that the gap utility value exists is greater than or equal to the said minimum discretized time, as seen in Equation \eqref{eq: gaputilityduration}
+
+\begin{equation} \label{eq: gaputilityduration}
+    k^{\mathrm{end}}_{A_g}-k^{\mathrm{start}}_{A_g}\geq k_{\mathrm{min}}
+\end{equation}
+
+Moreover, the time instance at which the move is initiated is chosen by taking the minimum magnitude of the required control signals (e.g., acceleration/deceleration to reach the "time-position"-area starting from $k_{\mathrm{Peri}}$.
+
+\begin{equation}
+    k^{\mathrm{start}}_{A_g} \le k^{\mathrm{Peri}} \le K - k_{\mathrm{min}} 
+\end{equation}
+
+The critic network aims to critique the action that an entity takes. This is done by taking a set of data per iteration under review (initial state, action taken, reward received, and final state), taking the current state and action taken, running them through the critic network to receive an evaluatory Q value (i.e., experimental value), which is then compared with the Bellman-equation-derived Q value (i.e., theoretical value), calculated using the final states. The loss (i.e., error) is then calculated and used to determine how the weights in the neural network should be altered (via backpropagation).
+
+
+\begin{equation}
+    Q(s,a)=r+\gamma \max\limits_{a'}Q(s',a')
+\end{equation}
+
+Now, this process is done over a sample of iterations, not just a singular iteration under review.
+
+\begin{equation}
+    Target = Reward + \gamma Critic(Next State 's, Actor(Next State 's))
+\end{equation}
+
+
+The total reward $R_t$ at time step $t$ is formulated as the sum of four distinct components representing Time-to-Collision (TTC) proximity pressure, goal node achievement, ego vehicle crash penalties, and adversarial vehicle crash penalties:
+\begin{equation}
+    R_t = R_{\text{TTC}} + R_{\text{goal}} + R_{\text{ego\_crash}} + R_{\text{adv\_crash}}
+\end{equation}
+
+\subsection*{1. Time-to-Collision (TTC) Squeeze Component}
+Let $A$ be the set of all controlled adversarial vehicles. For each adversary $i \in A$, the Time-to-Collision based on polygon geometry is denoted as $\tau_i$. The proximity reward term is calculated via the following piecewise function:
+\begin{equation}
+    R_{\text{TTC}} = \sum_{i \in A} f(\tau_i)
+\end{equation}
+where
+\begin{equation}
+    f(\tau_i) = 
+    \begin{cases} 
+    \dfrac{4.0}{\tau_i + 0.1} & \text{if } 1.0 \le \tau_i \le 4.0 \vspace{2mm} \\
+    -10.0 & \text{if } 0.0 \le \tau_i < 1.0 \\
+    0.0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+\subsection*{2. Goal Achievement Component}
+Let $L_{\text{ego}}$ represent the current structural lane index pair $(u, v)$ of the ego vehicle within the road network, and let $C_{\text{ego}} \in \{0, 1\}$ be a binary indicator denoting whether the ego vehicle has crashed ($1$ for crashed, $0$ for safe):
+\begin{equation}
+    R_{\text{goal}} = 
+    \begin{cases} 
+    +50.0 & \text{if } L_{\text{ego}} = ('l', 'm') \text{ and } C_{\text{ego}} = 0 \\
+    0.0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+\subsection*{3. Crash Guardrail Penalties}
+The severe negative constraints applied to prevent collision failures for both the ego vehicle ($R_{\text{ego\_crash}}$) and individual adversarial vehicles ($R_{\text{adv\_crash}}$ where $C_i \in \{0, 1\}$ marks the crash state of adversary $i$) are defined as:
+\begin{equation}
+    R_{\text{ego\_crash}} = 
+    \begin{cases} 
+    -100.0 & \text{if } C_{\text{ego}} = 1 \\
+    0.0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+\begin{equation}
+    R_{\text{adv\_crash}} = \sum_{i \in A} g(C_i) \quad \text{where} \quad g(C_i) = 
+    \begin{cases} 
+    -50.0 & \text{if } C_i = 1 \\
+    0.0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+\subsection*{4. Unified Dense Form}
+Expressed compactly utilizing indicator function notation $\mathbb{I}(\cdot)$, the comprehensive multi-agent reward function evaluates to:
+
+\begin{align}
+    R_t = \sum_{i \in A} \left[ \mathbb{I}(1 \le \tau_i \le 4) \frac{4}{\tau_i + 0.1} - 10 \cdot \mathbb{I}(0 \le \tau_i < 1) - 50 \cdot C_i \right] \nonumber \\
+    + 50 \cdot \mathbb{I}\big(L_{\text{ego}} = ('l', 'm')\big)(1 - C_{\text{ego}}) - 100 \cdot C_{\text{ego}}
+\end{align}
+
+For the reinforcement learning part, a multi-agent SAC RL is used
+
+
+
+
+So essentially what i wanna do is 
+- use SAC RL to explore local extrema to look for specific coordinations
+- once converged enough(the actor loss, qf loss, and alpha), freeze the policy and use nondeterministic (probabilistic) to still output actions --> remember that the alpha has both mean and standard dev
+
+the more you train the policies, the higher poss that standard dev gets smaller and smaller and essentially becomes deterministic (not the best for farming edge cases of same coordination style, different configuration)
+
+can write script that recognizes when a policy has converged enough for it to find a specific coordination and then find s
+
+grab the 
+
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}
