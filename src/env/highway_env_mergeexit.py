@@ -8,10 +8,9 @@ from highway_env.road.road import Road, RoadNetwork
 from highway_env.road.lane import StraightLane, LineType, SineLane
 
 from highway_env.vehicle.behavior import IDMVehicle
-from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
-from src.env.risk_calculators import PolygonTTCCalculator
+from src.env.risk_calculators import PolygonTTCCalculator, RewardTTCAdvAdvFunction, RewardTTCEgoAdvFunction
 
 from configs.configs import EnvArgs, RLArgs
 
@@ -393,6 +392,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         is_release_phase = dist_to_exit < reward_args["release_distance"]
 
+        adv_adv_reward_calculator = RewardTTCAdvAdvFunction()
+        adv_ego_reward_calculator = RewardTTCEgoAdvFunction()
+
         # ====== LOCAL REWARDS: Rewarding each adversary =======
 
         for i, adv in enumerate(adversaries):
@@ -417,27 +419,13 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             for j, other_adv in enumerate(adversaries):
                 if i == j: continue
                 adv_adv_ttc = PolygonTTCCalculator.compute_ttc(adv, other_adv)
-
-                if 0.0 <= adv_adv_ttc < 1.0: # REALLY high risk of fratricide
-                    adv_reward += reward_args["adv_adv_ttc_close_penalty"] # [-50]
-                elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
-                    adv_reward += reward_args["adv_adv_ttc_near_m"] * (1/adv_adv_ttc) ** 1/2 + reward_args["adv_adv_ttc_near_b"] # [-50, -20]
-                elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
-                    adv_reward += reward_args["adv_adv_ttc_far_m"] * (1/adv_adv_ttc) + reward_args["adv_adv_ttc_far_b"] # [-20, -60]
+                adv_reward += adv_adv_reward_calculator.compute_reward(adv_adv_ttc)
             
             # Bully the ego!
             adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
 
-            if not is_release_phase: # Still trying to block on the highway
-                if 0.0 <= adv_ego_ttc < 1.0: # Okay uhh, too much
-                    adv_reward += reward_args["adv_ego_ttc_close_penalty"] # [-60]
-                elif 1.0 <= adv_ego_ttc <= 4.0: # Cool, try to keep it like this
-                    adv_reward += reward_args["adv_ego_ttc_near_a"] * (adv_ego_ttc - reward_args["adv_ego_ttc_near_h"])**2 + reward_args["adv_ego_ttc_near_k"] # [-50, 20, -10]
-                elif adv_ego_ttc > 4.0: # Too safe, get closer to ego!
-                    adv_reward += reward_args["adv_ego_ttc_far_m"] * (1/adv_ego_ttc) + reward_args["adv_ego_ttc_far_b"]  # [-10, -60]
-            else: # Release phase, let ego go!
-                if 0.0 <= adv_ego_ttc <= 4.0: # OkaaaYYY you really gotta back off now 
-                    adv_reward += reward_args["adv_release_phase_m"] * adv_ego_ttc + reward_args["adv_release_phase_b"] # [-70, -20]
+            adv_ego_reward_calculator.set_phase("RELEASE" if is_release_phase else "BLOCKING")
+            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc)
 
             # Consolidate rewards
 
