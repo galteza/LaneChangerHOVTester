@@ -9,6 +9,9 @@ class EnvActionConfigArgs:
     type: str = "ContinuousAction"
     longitudinal: bool = True
     lateral: bool = True
+    acceleration_range: tuple[float, float] = field(default_factory=lambda: (-4.0, 1.0)) # in m/s^2
+    steering_range: tuple[float, float] = field(default_factory=lambda: (-0.174, 0.174)) # approx. 10 degrees in rad
+    # can add speed range too! it's a tuple
 
 @dataclass
 class EnvActionArgs:
@@ -57,13 +60,13 @@ class EnvRewardArgs:
 
     adv_ego_ttc_near_a: float = -20.8
     adv_ego_ttc_near_h: float = 2.8
-    adv_ego_ttc_near_k: float = 20
+    adv_ego_ttc_near_k: float = 50.0
 
     adv_ego_ttc_far_m: float = -6.25
     adv_ego_ttc_far_b: float = 15.0
 
     adv_release_phase_m: float = 12.5
-    adv_release_phase_b: float = -70
+    adv_release_phase_b: float = -70.0
 
     ego_crash_penalty: float = -500.0
     ego_reach_exit_reward: float = 800.0
