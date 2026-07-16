@@ -327,12 +327,12 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         for lane_idx in range(lanes_count):
             highway_lane = self.road.network.get_lane(("a", "b", lane_idx))
             for car_idx in range(2):
-                longitudinal_pos_m = 40 - (car_idx * 20)
+                longitudinal_pos_m = 80 * car_idx
 
                 adv = MDPVehicle(
                     self.road,
                     highway_lane.position(longitudinal_pos_m, 0),
-                    speed = np.random.uniform(20,30)
+                    speed = np.random.uniform(25,36)
                 )
                 self.road.vehicles.append(adv)
                 self.controlled_vehicles.append(adv)
@@ -408,7 +408,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
             # Drive safe!
             if adv.crashed and not self.config["adv_crash_penalization"][i]:
-                adv_reward -= 55.0 # Penalty for bad driving leading to crash
+                adv_reward += reward_args["adv_crash_penalty"] # Penalty for bad driving leading to crash
 
             # Don't endanger other team mates!
             for j, other_adv in enumerate(adversaries):
@@ -416,25 +416,25 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 adv_adv_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, other_adv))
 
                 if 0.0 <= adv_adv_ttc < 1.0: # REALLY high risk of fratricide
-                    adv_reward -= 15.0
+                    adv_reward += reward_args["adv_adv_ttc_close_penalty"] # [-50]
                 elif 1.0 <= adv_adv_ttc <= 4.0: # Need to back off!
-                    adv_reward -= 8.0 * _safe_inverse_ttc(adv_adv_ttc) # [2, 8]
+                    adv_reward += reward_args["adv_adv_ttc_near_m"] * _safe_inverse_ttc(adv_adv_ttc) ** 1/2 + reward_args["adv_adv_ttc_near_b"] # [-50, -20]
                 elif adv_adv_ttc > 4.0: # Okay, but don't stray too far!
-                    adv_reward -= adv_adv_ttc / 1.5 # [1, inf]
+                    adv_reward += reward_args["adv_adv_ttc_far_multiplier"] * adv_adv_ttc # [-20, -60]
             
             # Bully the ego!
             adv_ego_ttc = _safe_ttc(PolygonTTCCalculator.compute_ttc(adv, ego))
 
             if not is_release_phase: # Still trying to block on the highway
                 if 0.0 <= adv_ego_ttc < 1.0: # Okay uhh, too much
-                    adv_reward -= 30.0
+                    adv_reward += reward_args["adv_ego_ttc_close_penalty"] # [-60]
                 elif 1.0 <= adv_ego_ttc <= 4.0: # Cool, try to keep it like this
-                    adv_reward += 4.0 * _safe_inverse_ttc(adv_ego_ttc) # [1, 4]
+                    adv_reward += reward_args["adv_ego_ttc_near_a"] * (adv_ego_ttc - reward_args["adv_ego_ttc_near_h"])**2 + reward_args["adv_ego_ttc_near_k"] # [-50, 20, -10]
                 elif adv_ego_ttc > 4.0: # Too safe, get closer to ego!
-                    adv_reward -= adv_ego_ttc / 4.0 # [1, inf]
+                    adv_reward += reward_args["adv_ego_ttc_far_m"] * adv_ego_ttc + reward_args["adv_ego_ttc_far_b"]  # [-10, -60]
             else: # Release phase, let ego go!
                 if 0.0 <= adv_ego_ttc <= 4.0: # OkaaaYYY you really gotta back off now 
-                    adv_reward -= 4.0 * _safe_inverse_ttc(adv_ego_ttc) # [1, 4]
+                    adv_reward += reward_args["adv_release_phase_m"] * adv_ego_ttc + reward_args["adv_release_phase_b"] # [-70, -20]
 
             # Consolidate rewards
 
@@ -466,16 +466,16 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                         zones_occupied["left"] = 1
             
             occupied_count = sum(zones_occupied.values())
-            team_reward += occupied_count ** 2 * 2.5
+            team_reward += occupied_count ** 3 * 1.5
 
         # Ego reached goal!!
         if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':
             if not ego.crashed:
-                team_reward += 100.0
+                team_reward += reward_args["ego_reach_exit_reward"]
 
         # Ego has crashed!!
         if ego.crashed:
-            team_reward -= 100.0
+            team_reward += reward_args["ego_crash_penalty"]
 
         for i in range(len(adversaries)):
             indiv_rewards[i] += team_reward # Penalty for crashing into ego

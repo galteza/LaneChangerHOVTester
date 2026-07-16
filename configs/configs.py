@@ -38,6 +38,35 @@ class EnvRewardArgs:
     lateral_occupancy_longitudinal_corridor: float = 10.0
     lane_keeping_corridor: float = 2.0
 
+    # Penalties and rewards
+
+    adv_crash_penalty: float = -100.0
+
+    # Adversary-to-Adversary TTC Penalties
+
+    adv_adv_ttc_close_penalty: float = -50.0
+
+    adv_adv_ttc_near_m: float = -60.0
+    adv_adv_ttc_near_b: float = 10.0
+
+    adv_adv_ttc_far_multiplier: float = -5.0
+
+    # Adversary-to-Ego TTC Penalties
+
+    adv_ego_ttc_close_penalty: float = -60.0
+
+    adv_ego_ttc_near_a: float = -20.8
+    adv_ego_ttc_near_h: float = 2.8
+    adv_ego_ttc_near_k: float = 20
+
+    adv_ego_ttc_far_m: float = -6.25
+    adv_ego_ttc_far_b: float = 15.0
+
+    adv_release_phase_m: float = 12.5
+    adv_release_phase_b: float = -70
+
+    ego_crash_penalty: float = -500.0
+    ego_reach_exit_reward: float = 800.0
 
 @dataclass
 class EnvArgs:
@@ -111,7 +140,7 @@ class RLArgs:
     action_dim: int = 2  # Throttle, Steering
     
     total_timesteps: int = 1000000
-    buffer_size: int = 500 # int(1e6)
+    buffer_size: int = int(5e5) # int(1e6)
     gamma: float = 0.99
     tau: float = 0.005
     batch_size: int = 256
