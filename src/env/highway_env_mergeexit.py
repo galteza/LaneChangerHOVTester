@@ -457,7 +457,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                         zones_occupied["left"] = 1
             
             occupied_count = sum(zones_occupied.values())
-            team_reward += 20 * (occupied_count ** 2 - 2 ** 2)
+            team_reward += 0.2 * (occupied_count ** 2 - 4)
 
         # Ego reached goal!!
         if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':

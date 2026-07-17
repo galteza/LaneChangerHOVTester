@@ -160,8 +160,8 @@ class RewardTTCAdvAdvFunction(RewardTTCFunction):
         self.adv_adv_ttc_far_m = self.args.env.reward.adv_adv_ttc_far_m
         self.adv_adv_ttc_far_b = self.args.env.reward.adv_adv_ttc_far_b
 
-        self.baseline_N = 57
-        self.peak_P = 58.5
+        self.baseline_N = 0.57
+        self.peak_P = 0.585
         self.rise_slope_k1 = 0.8
         self.decay_slope_k2 = 0.6
         self.rise_shift_a = 3.4
@@ -208,15 +208,15 @@ class RewardTTCEgoAdvFunction(RewardTTCFunction):
     def compute_reward(self, ttc) -> float:
 
         if self.phase == "BLOCKING":
-            self.baseline_N = 57
-            self.peak_P = 95
+            self.baseline_N = 0.57
+            self.peak_P = 0.95
             self.rise_slope_k1 = 2.4
             self.decay_slope_k2 = 1.3
             self.rise_shift_a = 1.4
             self.decay_shift_b = 6
         elif self.phase == "RELEASE":
-            self.baseline_N = 57
-            self.peak_P = 95
+            self.baseline_N = 0.57
+            self.peak_P = 0.95
             self.rise_slope_k1 = 2.4
             self.decay_slope_k2 = 1.3
             self.rise_shift_a = 3.6

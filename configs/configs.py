@@ -72,8 +72,8 @@ class EnvRewardArgs:
     adv_release_phase_m: float = 12.5
     adv_release_phase_b: float = -70.0
 
-    ego_crash_penalty: float = -1000.0
-    ego_reach_exit_reward: float = 800.0
+    ego_crash_penalty: float = -10.0 # scaled down
+    ego_reach_exit_reward: float = 8.0 # scaled down
 
 @dataclass
 class EnvArgs:

@@ -78,6 +78,10 @@ if __name__ == "__main__":
     flat_obs, _ = wrapped_training_env.reset(seed=RLargs.seed) # already flattened observation matrix
 
     try:
+
+        reward_cumulative = np.zeros(RLargs.num_agents)
+        step_counter = 0
+        average_reward = np.zeros(RLargs.num_agents)
     
         for global_step in range(RLargs.total_timesteps):
 
@@ -91,6 +95,15 @@ if __name__ == "__main__":
             # ENV STEP: Take next step in environment using chosen actions
 
             next_flat_obs, reward, done, truncated, info = wrapped_training_env.step(actions)
+
+            reward_cumulative += reward
+            step_counter += 1
+            average_reward = reward_cumulative / step_counter
+
+            if done or truncated:
+                print(f"==== EP FINISHED AFTER {step_counter} STEPS /// AVERAGE REWARD: {average_reward} ====")
+                reward_cumulative = np.zeros(RLargs.num_agents)
+                step_counter = 0
             
             # STORAGE IN BUFFER: Store all these in the buffer for later training
             
@@ -109,6 +122,8 @@ if __name__ == "__main__":
                     writer.add_scalar("losses/qf_loss", qf_loss_val, global_step)
                     writer.add_scalar("losses/actor_loss", actor_loss_val, global_step)
                     writer.add_scalar("losses/alpha", agent.alpha, global_step)
+                    for idx in range(RLargs.num_agents):
+                        writer.add_scalar(f"average reward_{idx}", average_reward[idx], global_step)
                     print(f"Step: {global_step} | SPS: {int(global_step / (time.time() - start_time))} | Reward: {np.mean(reward)} {reward} ")
 
                     writer.flush() # Ensure that all pending events have been written to disk
