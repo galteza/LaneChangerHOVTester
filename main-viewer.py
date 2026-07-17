@@ -27,33 +27,79 @@ if __name__ == "__main__":
     model = MASACRL(args) 
 
     # 4. Find the newest run directory and pick the best available actor checkpoint
-    runs_root = Path(__file__).resolve().parent / "runs"
-    run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
-    if not run_dirs:
-        raise FileNotFoundError(f"No run directories found in {runs_root}")
 
-    run_dir = max(run_dirs, key=lambda path: path.stat().st_mtime)
-    actor_final_path = run_dir / "actor_final.pth"
-    actor_interrupted_path = run_dir / "actor_interrupted.pth"
-    checkpoint_candidates = list(run_dir.glob("checkpoint_actor_*.pth"))
-    latest_checkpoint = None
-    if checkpoint_candidates:
-        def _checkpoint_step(path: Path) -> int:
-            match = re.search(r"checkpoint_actor_(\d+)\.pth$", path.name)
-            return int(match.group(1)) if match else -1
+    # --- Configuration ---
+    # Set to your specific folder path, or None to skip straight to the fallback.
+    specific_run_dir = None # "runs/merge_exit_highway__configs__1__20260716-183711"
 
-        latest_checkpoint = max(checkpoint_candidates, key=_checkpoint_step)
+    # Set to a specific episode integer (e.g., 500), or None to use the default fallback logic.
+    specific_episode = None 
+    # ---------------------
 
-    if actor_final_path.exists():
-        actor_path = actor_final_path
-    elif actor_interrupted_path.exists():
-        actor_path = actor_interrupted_path
-    elif latest_checkpoint is not None:
-        actor_path = latest_checkpoint
-    else:
-        raise FileNotFoundError(
-            f"No actor checkpoint found in {run_dir}. Expected `actor_final.pth`, `actor_interrupted.pth`, or `checkpoint_actor_<step>.pth`."
-        )
+    # Determine the run directory (try specific first, fallback to newest)
+    run_dir = None
+
+    if specific_run_dir:
+        candidate_dir = Path(specific_run_dir)
+        if candidate_dir.exists() and candidate_dir.is_dir():
+            run_dir = candidate_dir
+        else:
+            print(f"Warning: Specific folder '{candidate_dir}' not found. Falling back to newest run.")
+
+    if run_dir is None:
+        runs_root = Path(__file__).resolve().parent / "runs"
+        
+        if not runs_root.exists():
+            raise FileNotFoundError(f"Runs root directory not found: {runs_root}")
+            
+        run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
+        if not run_dirs:
+            raise FileNotFoundError(f"No run directories found in {runs_root}")
+
+        run_dir = max(run_dirs, key=lambda path: path.stat().st_mtime)
+
+    print(f"Loading checkpoints from: {run_dir}")
+
+    # Determine the actor checkpoint
+    actor_path = None
+
+    # Attempt to load the specific episode if requested
+    if specific_episode is not None:
+        candidate_actor = run_dir / f"checkpoint_actor_{specific_episode}.pth"
+        if candidate_actor.exists():
+            actor_path = candidate_actor
+            print(f"Found specific checkpoint: {actor_path.name}")
+        else:
+            print(f"Warning: {candidate_actor.name} not found. Falling back to default checkpoints.")
+
+    # Fallback logic if no specific episode was requested (or if it was missing)
+    if actor_path is None:
+        actor_final_path = run_dir / "actor_final.pth"
+        actor_interrupted_path = run_dir / "actor_interrupted.pth"
+        
+        # Find the latest checkpoint as a last resort
+        checkpoint_candidates = list(run_dir.glob("checkpoint_actor_*.pth"))
+        latest_checkpoint = None
+        if checkpoint_candidates:
+            def _checkpoint_step(path: Path) -> int:
+                match = re.search(r"checkpoint_actor_(\d+)\.pth$", path.name)
+                return int(match.group(1)) if match else -1
+
+            latest_checkpoint = max(checkpoint_candidates, key=_checkpoint_step)
+
+        # Pick the best available file
+        if actor_final_path.exists():
+            actor_path = actor_final_path
+        elif actor_interrupted_path.exists():
+            actor_path = actor_interrupted_path
+        elif latest_checkpoint is not None:
+            actor_path = latest_checkpoint
+        else:
+            raise FileNotFoundError(
+                f"No actor checkpoint found in {run_dir}. Expected `actor_final.pth`, `actor_interrupted.pth`, or `checkpoint_actor_<episode>.pth`."
+            )
+
+    print(f"Selected actor model: {actor_path}")
 
     # You only strictly need the actor for rendering, but you can load critics if you want to log Q-values!
     
