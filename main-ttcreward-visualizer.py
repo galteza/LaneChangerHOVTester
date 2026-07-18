@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-from src.env.risk_calculators import RewardTTCAdvAdvFunction, RewardTTCEgoAdvFunction
+from src.env.reward_functions import RewardTTCAdvAdvFunction, RewardTTCEgoAdvFunction
 
 if __name__ == "__main__":
     # Create instances of the reward functions
