@@ -1,20 +1,23 @@
-% !TeX program = pdflatex
+% !TeX program = lualatex
 
 \documentclass[12pt, a4paper]{report}
 \usepackage{graphicx} % Required for inserting images
 \usepackage{amsmath}
-\usepackage{amssymb}
 \usepackage{geometry}
+\usepackage{amssymb}
+\usepackage{luatexja}
+\usepackage[ipaex]{luatexja-preset} % Adds standard Japanese fonts
 
 \graphicspath{{figures/}{assets/}} % Set the path for images
 
-\geometry{top=3cm, bottom=3cm, left=3cm, right=3cm}
+
+\geometry{top=3cm,bottom=3cm,left=3cm,right=3cm}
 
 \DeclareMathOperator*{\argmax}{argmax}
 \DeclareMathOperator*{\argmin}{argmin}
 
 
-\title{Risk-critical scenario generation for lane-changing (LC) autonomous driving (AD) task on multi-lane highway, using multi-agent soft actor-critic reinforcement learning (MASAC-RL)​}
+\title{Generating Risk-Critical Scenarios for Autonomous Highway Lane Changing via Multi-Agent Soft Actor-Critic}
 \author{Gabriel Alteza}
 \date{August 2026}
 
@@ -25,18 +28,22 @@
         
         % --- LOGOS ---
         % Adjust the height parameter to scale your logos properly
-        \includegraphics[height=1.5cm]{tact_logo.jpg} 
+        \includegraphics[height=1.5cm]{assets/tact_logo.jpg} 
         \hspace{0.5cm} % Space between left logo and vertical line
-        \includegraphics[height=1.5cm]{nagoya_university_logo.png} 
+        \includegraphics[height=1.5cm]{assets/nagoya_university_logo.png} 
         \hspace{0.5cm} % Space between left logo and vertical line
         \rule{1pt}{1.5cm} % Vertical line
         \hspace{0.5cm} % Space between vertical line and right logo
-        \includegraphics[height=1.5cm]{suzuki_lab_logo.png}
+        \includegraphics[height=1.5cm]{assets/suzuki_lab_logo.png}
         
         \vspace*{3cm}
         
         % --- TITLE ---
-        {\Large \uppercase{Risk-critical scenario generation for lane-changing (LC) autonomous driving (AD) task on multi-lane highway, using multi-agent soft actor-critic reinforcement learning (MASAC-RL)} \\ \uppercase{} \par}
+        {\Large \MakeUppercase{Generating Risk-Critical Scenarios for Autonomous Highway Lane Changing via Multi-Agent Soft Actor-Critic}\\ \par}
+
+        \vspace{0.5cm}
+        
+        {\Large マルチエージェントSoft Actor-Criticを用いた自動運転の高速道路車線変更におけるリスククリティカルシナリオ生成 \par}
         
         \vspace{2cm}
         
@@ -47,7 +54,7 @@
         
         ALTEZA Gabriel Pascua
         
-        \vspace{1.25cm}
+        \vspace{1.5cm}
         
         % --- DEPARTMENT & DEGREE INFO ---
         Department of Mechanical \& Aerospace Engineering \\
@@ -57,7 +64,7 @@
         
         Degree thesis is submitted for
         
-        \vspace{1.5cm}
+        \vspace{1cm}
         
         % --- SUPERVISORS ---
         Supervisors:\\
@@ -74,46 +81,59 @@
     \end{center}
 \end{titlepage}
 
+\tableofcontents
+\newpage
+
 
 \section{Abstract}
 
+The lane-changing task is notoriously one of the more difficult to generate dynamic, risk-critical testing scenarios due to its
+
+No known industry standard on lane
 
 
 
 \section{Introduction}
 
-The deployment of autonomous driving technologies into society has been one of the most delayed advancements to the field of autonomous vehicles, especially dealing with human pushback \cite{suzuki2025safety}. As such, researchers and scientists have been working towards developing various methods to test the safety and robustness of autonomous driving (AD) tasks on the road.
+The deployment of autonomous driving technologies into society has been one of the most delayed advancements to the 
+field of autonomous vehicles, especially dealing with human pushback \cite{suzuki2025safety}. As such, researchers 
+and scientists have been working towards developing various methods to test the safety and robustness of autonomous 
+driving (AD) tasks on the road.
 
-One of the least-explored AD task in terms of safety testing is the lane-changing or lane-intrusion AD task in which the vehicle tries to insert itself within a specific gap. Past papers have employed both static methods of evaluating the ability of a vehicle's lane changing, especially with regard to global standards, such as the ISO. However, there remains a huge gap in the available research on dynamic methods wherein obstacles are moving or actively working against the system under test (SUT). As such, this research aims to create a safety verification system for the lane-changing or lane-intrusion task into the gap of a leading-following pair of vehicles. Moreover, this research will test the lane-changing logic's ability to withstand multiple lane changes, coming in from a merging ramp and traversing the highway to reach the preset desired exit ramp situated on the other edge of the highway.
+One of the least-explored AD task in terms of safety testing is the lane-changing or lane-intrusion AD task in which 
+the vehicle tries to insert itself within a specific gap. Past papers have employed both static methods of evaluating 
+the ability of a vehicle's lane changing, especially with regard to global standards, such as the ISO. However, there 
+remains a huge gap in the available research on dynamic methods wherein obstacles are moving or actively working against 
+the system under test (SUT). As such, this research aims to create a safety verification system for the lane-changing or 
+lane-intrusion task into the gap of a leading-following pair of vehicles. Moreover, this research will test the lane-changing 
+logic's ability to withstand multiple lane changes, coming in from a merging ramp and traversing the highway to reach 
+the preset desired exit ramp situated on the other edge of the highway.
 
-Reinforcement learning, more broadly, machine learning, has been a hot area of research for its efficacy as a research methodology tool in solving problems that are not easily solvable through traditional white-box means. Reinforcement learning, which uses a neural network to learn from repeated simulations within a set environment, learns from its mistakes and successes in order to develop a policy that grows stronger and eventually converges to a robust neural network for the decision-making of an appropriate action to take within the environment under test.
+Reinforcement learning, more broadly, machine learning, has been a hot area of research for its efficacy as a research 
+methodology tool in solving problems that are not easily solvable through traditional white-box means. 
+Reinforcement learning, which uses a neural network to learn from repeated simulations within a set environment, learns 
+from its mistakes and successes in order to develop a policy that grows stronger and eventually converges to a robust 
+neural network for the decision-making of an appropriate action to take within the environment under test.
 
-In the field of autonomous driving safety testing, one of the most important parts to research on is the coverage of the tests, namely how diverse the testing scenarios generated are from one another in order to ensure that a wider scope of possible situations are covered. Moreover, rare cases in which risk of crashing is high are difficult to quantify and hard-code manually, while they remain to be the most important to be covered in the overall scope, especially since they are directly linked to human comfortability and safety on the road when the vehicles employing such are eventually deployed on the road.
+In the field of autonomous driving safety testing, one of the most important parts to research on is the coverage of 
+the tests, namely how diverse the testing scenarios generated are from one another in order to ensure that a wider scope 
+of possible situations are covered. Moreover, rare cases in which risk of crashing is high are difficult to quantify and 
+hard-code manually, while they remain to be the most important to be covered in the overall scope, especially since they 
+are directly linked to human comfortability and safety on the road when the vehicles employing such are eventually deployed on the road.
 
-Hence, this study aims to use specifically a multi-agent soft-actor-critic reinforcement learning framework to control a platoon of moving vehicles and let them learn how to get themselves as close as possible to inducing high risk of crash within the SUT without actually letting it crash. Moreover, the soft-actor-critic portion of this framework aims to maximize the entropy of the discovery of appropriate actions. Rather than outputting one proven action that works, the policy outputs a probability mapping of various non-clusterable actions that all efficiently maximize risk of crash in the SUT. In such way, the coverage of test-case generation is hypothetically increased, and may be evaluated against previous baseline methods for its strength in generating high-risk edge cases for lane-changing and lane-intrusion scenarios on a highway.
+Hence, this study aims to use specifically a multi-agent soft-actor-critic reinforcement learning framework to control 
+a platoon of moving vehicles and let them learn how to get themselves as close as possible to inducing high risk of crash 
+within the SUT without actually letting it crash. Moreover, the soft-actor-critic portion of this framework aims to maximize 
+the entropy of the discovery of appropriate actions. Rather than outputting one proven action that works, the policy outputs 
+a probability mapping of various non-clusterable actions that all efficiently maximize risk of crash in the SUT. In such way, 
+the coverage of test-case generation is hypothetically increased, and may be evaluated against previous baseline methods for 
+its strength in generating high-risk edge cases for lane-changing and lane-intrusion scenarios on a highway.
 
-\section{Theory}
+\subsection{Lane Changing Models}
+\subsubsection{Kinematic Bicycle Model}
 
-\subsection{Program Architecture}
-
-The architecture of the file tree is as follows:
-\begin{itemize}
-    \item Global planning of lane-changing SUT
-    \item Safety corridor generation for use of lane-changing SUT
-    \item Longitudinal movement MPC
-    \item Lateral movement MPC
-    \item Platoon MASAC-RL
-\end{itemize}
-
-The lane-changing SUT will be governed by a global planner which includes information on the target position and calculation of urgency for making lane changes (i.e., increases steadily the closer to the exit the SUT gets). In the lane-changing SUT's calculation of trajectory and path-planning as well, it must determine the "safety corridor" or maximum area for plausible intrusion before performing the lane change.
-
-On the other hand, the platoon will be using the previously mentioned MASAC-RL framework in order to instruct where the adversary must head in the next step. The neural network will be constantly under improvement until convergence, the limit of which is to be defined in a later section.
-
-Both the SUT vehicle and each of the platoon vehicles will be using two model predictive control (MPC) that govern the low-level control needed to drive the vehicles to the desired positions. The maneuver is decoupled, hence divided into two parts, namely longitudinal (along the highway) and lateral (across the highway).
-
-\subsection{Kinematic Bicycle Model}
-
-The vehicles all will be modeled using the kinematic bicycle model (KBM). Based on the KBM model, the states and inputs to be considered are as follows.
+The vehicles all will be modeled using the kinematic bicycle model (KBM). Based on the KBM model, the states and inputs to 
+be considered are as follows.
 
 \begin{equation}
     \begin{bmatrix}
@@ -132,7 +152,150 @@ The vehicles all will be modeled using the kinematic bicycle model (KBM). Based 
     \end{bmatrix}
 \end{equation}
 
-\subsection{Lane-Changing Vehicle}
+\subsubsection{Intelligent Driver Model (IDM) + Minimizing Overall Braking Induced by Lane Changes (MOBIL)}
+
+The IDM is a car-following model that describes the longitudinal dynamics of a vehicle based on its desired speed, and the 
+distance to the vehicle in front of it. The IDM is defined by the following equation:
+
+\subsection{Reinforcement Learning}
+
+The field of reinforcement learning (RL) is a subfield of the broader field of machine learning focusing on training an agent
+to make the appropriate decisions in a particular environment. Based on the characteristics of the environment, a reward function
+is defined and is made to provide the agent with feedback on the appropriateness of its actions. The agent then uses this feedback to 
+learn the appropriate policy to take in order to maximize the expected return.
+
+Reinforcement learning has multiple ways of being implemented, with actors and critics being the backbone of its most popular implementations.
+The concept of learning by mistake is governed by learning how an environment works \(critic role\) and how to best navigate it (actor role).
+Critic-only RL implementations, such as value-based methods, are utilized in situations wherein an environment is fully observable and has no
+room for ambiguity in intuitively choosing appropriate actions when the goal is clearly defined. As such, there is no need for learning the intricacies of
+an environment. Rather, the critic simply gives a score to what is currently observed in the environment in order to determine the best course of action.
+
+Actor-only RL implementations, on the other hand, trains an agent how to act based on raw  in environments where either the specific configuration of an action to take in the environment is complex or the environment is partially observable.
+They directly
+parameterize a policy (the actor) and update it by optimizing the expected
+return (using policy gradients)
+
+\subsubsection{Soft Actor-Critic Reinforcement Learning}
+\subsubsection{Multi-Agent Reinforcement Learning}
+
+\section{Objectives}
+
+The objective of this research is detailed as follows: 
+\begin{enumerate}
+    \item To create a multi-lane highway environment that simulates a highway-traversing scenario where 
+    the ego vehicle is tasked to conduct lane changes to reach the desired exit lane, while the other 
+    vehicles are tasked to bully the ego vehicle into high-risk scenarios without actually crashing into it.
+    \item To implement the baseline IDM + MOBIL model in an ego lane-changing vehicle's goal of reaching the desired exit
+    \item To implement a multi-agent soft actor-critic reinforcement learning framework to control the adverasarial platoon
+    \item 
+\end{enumerate}to create a multi-lane highway environment, which is designed to
+simulate a highway-traversing scenario where the ego vehicle is tasked to conduct lane changes to reach
+the desired exit lane, while the other vehicles are tasked to bully the ego vehicle into high-risk scenarios
+without actually crashing into it.
+
+\section{Methodology}
+\subsection{Highway Environment}
+
+The highway environment used a custom-made environment using the Python Gymnasium and Highway-Env libaries.
+The environment is a modified class of the AbstractEnv class of the Highway-Env library, which is a Python 
+library that allows the creation of environments of any imaginable geometry for simulating various highway 
+driving scenarios. 
+
+The adversarial vehicles, hereafter referred to as the "adversaries," are controlled by a multi-agent soft 
+actor-critic reinforcement learning agent, and the other vehicles are controlled by a predefined baseline 
+behavior model, specifically the IDM + MOBIL model.
+
+
+
+\newline
+
+The specifics of the environment are as follows:
+
+\begin{itemize}
+    \item 2 cruising lanes, 4 meters wide each
+    \item 1 merging lane, 4 meters wide
+    \item 1 exit lane, 4 meters wide
+    \item Cruising space of 300 meters
+    \item 1 ego vehicle coming from merging lane, 2 adversarial vehicles coming from cruising lanes
+\end{itemize}
+
+In the 
+
+\subsubsection{Observation Space}
+
+The observation space of the highway environment is the part of the reinforcement learning framework that
+provides the agent with the necessary numbers that describe its workable environment.
+As such, the observation space must be designed in a way that balances the need for necessary information 
+that does not bloat the observation space with unnecessary or redundant details that
+may hinder the learning process of the agent.
+
+In the
+
+\subsection{MASAC-RL Framework}
+
+Shared parameters are used for the actor and critic networks of the adversarial vehicles, especially as 
+vehicles are presumed to be homogeneous in their behavior and dynamics. Each of the actor and critic networks
+are to be fed the observational inputs of all the vehicles in each step chosen for training, once per adversarial 
+vehicle's unique observation.
+
+The actor input space for an adversarial vehicle would include the following:
+\begin{itemize}
+    \item Self-observation
+    \begin{enumerate}
+        \item Activity status (i.e., crashed or not): 0 for not crashed, 1 for crashed
+        \item Lateral distance from left boundary
+        \item Longitudinal and lateral position
+        \item Longitudinal and lateral velocity
+        \item Heading angle
+    \end{enumerate}
+    \item Ego LC observation
+    \item Other-adversary observation
+    Ego vehicle's longitudinal and lateral position, velocity, and heading angle
+    \item Adversarial vehicle's longitudinal and lateral position, velocity, and heading angle
+    \item Leading vehicle's longitudinal and lateral position, velocity, and heading angle
+    \item Following vehicle's longitudinal and lateral position, velocity, and heading angle
+\end{itemize}
+
+\subsubsection{Reward Function}
+
+The reward function of the highway environment, as mentioned, is the part of the reinforcement learning
+framework that details the motivation of the agents to learn a specific behavior.
+As such, the reward
+
+\begin{equation}
+R_{adv-adv} = \begin{cases}
+-50 & \text{if } \tau < 1.0 \\
+-60\tau + 10 & \text{if } 1.0 \leq \tau < 4.0 \\
+-2\tau + 24 & \text{if } 4.0 \geq \tau 
+\end{cases}
+\end{equation}
+
+\begin{equation}
+R_{adv-ego} = \begin{cases}
+-60 & \text{if } \tau < 1.0 \\
+-20.8(\tau - 2.8)^2 + 100 & \text{if } 1.0 \leq \tau < 4.0 \\
+-6.25\tau + 15 & \text{if } 4.0 \geq \tau 
+\end{cases}
+\end{equation}
+
+If release phase (lane changer less than 20 meters away from exit):
+
+\begin{equation}
+R_{adv-ego} = -6.25 \tau + 15 
+\end{equation}
+
+\begin{equation}
+R = -N + \frac{P+N}{1+\exp(-k_1(x-a))} - \frac{P}{1+exp(-k_2(x-b))}
+\end{equation}
+\subsubsection{}
+\section{Results \& Discussion}
+\section{Conclusion}
+
+
+\subsection{Risk Evaluation Methods}
+
+
+\section{Appendix}
 
 The pipeline of the lane-change maneuver of the ego vehicle involves the separation of the "if," "when," and "how" frameworks of the maneuver, as developed in \cite{7637091}. The "if" pertains to determining whether or not a lane-change maneuver into the next lane is appropriate. The "when" part aims to determine which gap to intrude into and when to begin the move. Lastly, the "how" pertains to the usage of low-level controllers to execute the maneuver according to the determined appropriate gap.
 
@@ -271,11 +434,13 @@ The severe negative constraints applied to prevent collision failures for both t
 
 \subsection*{4. Unified Dense Form}
 Expressed compactly utilizing indicator function notation $\mathbb{I}(\cdot)$, the comprehensive multi-agent reward function evaluates to:
-
 \begin{align}
     R_t = \sum_{i \in A} \left[ \mathbb{I}(1 \le \tau_i \le 4) \frac{4}{\tau_i + 0.1} - 10 \cdot \mathbb{I}(0 \le \tau_i < 1) - 50 \cdot C_i \right] \nonumber \\
     + 50 \cdot \mathbb{I}\big(L_{\text{ego}} = ('l', 'm')\big)(1 - C_{\text{ego}}) - 100 \cdot C_{\text{ego}}
 \end{align}
+
+
+
 
 For the reinforcement learning part, a multi-agent SAC RL is used
 
@@ -289,8 +454,6 @@ So essentially what i wanna do is
 the more you train the policies, the higher poss that standard dev gets smaller and smaller and essentially becomes deterministic (not the best for farming edge cases of same coordination style, different configuration)
 
 can write script that recognizes when a policy has converged enough for it to find a specific coordination and then find s
-
-grab the 
 
 
 \bibliographystyle{ieeetr}

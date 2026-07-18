@@ -1,0 +1,20 @@
+\contentsline {section}{\numberline {0.1}Abstract}{2}{}%
+\contentsline {section}{\numberline {0.2}Introduction}{2}{}%
+\contentsline {subsection}{\numberline {0.2.1}Lane Changing Models}{3}{}%
+\contentsline {subsubsection}{Kinematic Bicycle Model}{3}{}%
+\contentsline {subsubsection}{Intelligent Driver Model (IDM) + Minimizing Overall Braking Induced by Lane Changes (MOBIL)}{3}{}%
+\contentsline {subsection}{\numberline {0.2.2}Reinforcement Learning}{3}{}%
+\contentsline {subsubsection}{Soft Actor-Critic Reinforcement Learning}{4}{}%
+\contentsline {subsubsection}{Multi-Agent Reinforcement Learning}{4}{}%
+\contentsline {section}{\numberline {0.3}Objectives}{4}{}%
+\contentsline {section}{\numberline {0.4}Methodology}{4}{}%
+\contentsline {subsection}{\numberline {0.4.1}Highway Environment}{4}{}%
+\contentsline {subsubsection}{Observation Space}{5}{}%
+\contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{5}{}%
+\contentsline {subsubsection}{Reward Function}{6}{}%
+\contentsline {subsubsection}{}{6}{}%
+\contentsline {section}{\numberline {0.5}Results \& Discussion}{6}{}%
+\contentsline {section}{\numberline {0.6}Conclusion}{6}{}%
+\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{6}{}%
+\contentsline {section}{\numberline {0.7}Appendix}{6}{}%
+\contentsline {subsubsection}{LC Global Planner}{6}{}%

@@ -10,7 +10,16 @@ from highway_env.road.lane import StraightLane, LineType, SineLane
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
-from src.env.risk_calculators import PolygonTTCCalculator, RewardTTCAdvAdvFunction, RewardTTCEgoAdvFunction
+from src.env.risk_calculators import PolygonTTCCalculator
+from src.env.reward_functions import (
+    LaneKeepingRewardFunction,
+    RewardTTCAdvAdvFunction, 
+    RewardTTCEgoAdvFunction, 
+    SandwichingRewardFunction,
+    SimpleRewardFunction
+)
+
+
 
 from configs.configs import EnvArgs, RLArgs
 
@@ -373,27 +382,25 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         # ====== SETUP =======
 
-        # Setting the reward arguments
-
-        reward_args = self.config["reward"]
-
         # Setting important environment-related variables
         
         ego = self.ego
         adversaries = self.controlled_vehicles
-        dist_to_exit = sum(self.config["ends_m"][:4]) - ego.position[0]
 
         # Initializing the rewards
 
-        indiv_rewards = [0.0] * len(adversaries)
+        indiv_rewards = np.zeros(len(adversaries), dtype=np.float32)
         team_reward = 0.0
 
         # Splitting bullying into two phases: (1) blocking the ego from reaching the exit ramp, and (2) allowing the ego to reach the exit ramp successfully
 
-        is_release_phase = dist_to_exit < reward_args["release_distance"]
-
         adv_adv_reward_calculator = RewardTTCAdvAdvFunction()
         adv_ego_reward_calculator = RewardTTCEgoAdvFunction()
+        sandwiching_reward_calculator = SandwichingRewardFunction()
+        simple_reward_calculator = SimpleRewardFunction()
+        lane_keeping_reward_calculator = LaneKeepingRewardFunction()
+
+        adv_ego_reward_calculator.check_phase(ego.position[0])
 
         # ====== LOCAL REWARDS: Rewarding each adversary =======
 
@@ -401,19 +408,18 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
             adv_reward = 0.0
 
+            # Don't reverse on the highway!
+            if adv.velocity[0] < 0:
+                adv_reward += simple_reward_calculator.get_reward("adv_reverse_penalty")
+
             # Drive safe!
             if adv.crashed and not self.config["adv_crash_penalization"][i]:
-                adv_reward += reward_args["adv_crash_penalty"] # Penalty for bad driving leading to crash 
+                adv_reward += simple_reward_calculator.get_reward("adv_crash_penalty")
 
             # If adversary driving too close to boundary
 
             left_boundary, right_boundary = self._get_current_lateral_boundaries(adv)
-
-            # model a parabola maximum at the center of the lane, with a minimum at the boundaries, to penalize driving too close to the boundaries
-            adv_reward += -((adv.position[1] - (left_boundary[1] + right_boundary[1]) / 2) ** 2) + reward_args["adv_boundary_k"] # Penalty for driving too close to boundary
-
-            if left_boundary[1] + VEHICLE_WIDTH / 2 > adv.position[1] or right_boundary[1] - VEHICLE_WIDTH / 2 < adv.position[1]:
-                adv_reward += reward_args["adv_boundary_penalty"] # Penalty for driving too close to boundary
+            adv_reward += lane_keeping_reward_calculator.compute_reward(adv.position[1], left_boundary[1], right_boundary[1])
 
             # Don't endanger other team mates!
             for j, other_adv in enumerate(adversaries):
@@ -423,53 +429,26 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             
             # Bully the ego!
             adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
-
-            adv_ego_reward_calculator.set_phase("RELEASE" if is_release_phase else "BLOCKING")
+            adv_ego_reward_calculator.check_phase(ego.position[0])
             adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc)
 
             # Consolidate rewards
 
             indiv_rewards[i] += adv_reward
 
-        # ====== GLOBAL REWARDS: Rewarding team performance =======
+        # ====== PLATOON REWARDS: Rewarding team performance =======
         
         # Try sandwiching the ego
 
-        longitudinal_occupancy_longitudinal_corridor = reward_args["longitudinal_occupancy_longitudinal_corridor"]
-        lateral_occupancy_longitudinal_corridor = reward_args["lateral_occupancy_longitudinal_corridor"]
-        lane_keeping_corridor = reward_args["lane_keeping_corridor"]
-
-        if not is_release_phase:
-            zones_occupied = {"front": 0, "back": 0, "left": 0, "right": 0}
-
-            for adv in adversaries:
-                dx = adv.position[0] - ego.position[0]
-                dy = adv.position[1] - ego.position[1]
-
-                if 0 < dx < longitudinal_occupancy_longitudinal_corridor and abs(dy) < lane_keeping_corridor: # 25m in front of ego and within lane width
-                    zones_occupied["front"] = 1
-                elif -longitudinal_occupancy_longitudinal_corridor < dx < 0 and abs(dy) < lane_keeping_corridor: # 25m behind ego and within lane width
-                    zones_occupied["back"] = 1
-                elif abs(dx) < lateral_occupancy_longitudinal_corridor and abs(dy) > lane_keeping_corridor:
-                    if dy > 0:
-                        zones_occupied["right"] = 1
-                    elif dy < 0:
-                        zones_occupied["left"] = 1
-            
-            occupied_count = sum(zones_occupied.values())
-            team_reward += 0.2 * (occupied_count ** 2 - 4)
+        indiv_rewards += sandwiching_reward_calculator.compute_reward(adversaries, ego) 
 
         # Ego reached goal!!
-        if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm':
-            if not ego.crashed:
-                team_reward += reward_args["ego_reach_exit_reward"]
+        if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm' and not ego.crashed:
+            indiv_rewards += np.array(simple_reward_calculator.get_reward("ego_reach_exit_reward"), dtype=np.float32)
 
         # Ego has crashed!!
         if ego.crashed:
-            team_reward += reward_args["ego_crash_penalty"]
-
-        for i in range(len(adversaries)):
-            indiv_rewards[i] += team_reward # Penalty for crashing into ego
+            indiv_rewards += np.array(simple_reward_calculator.get_reward("ego_crash_penalty"), dtype=np.float32)
 
         return indiv_rewards
     
@@ -726,24 +705,3 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         
         # Turn next observation into shape RL can read (flatten) and return everything
         return self.observation(_obs), reward, terminated, truncated, info
-    
-
-
-
-# env = MergeExitLaneHighway_Environment()
-# env.render_mode = "human" # Tells Gymnasium to prepare a visual window
-# env.reset()
-
-# # Run a loop to step the physics engine forward in time
-# for _ in range(200):
-#     # Action '1' is the IDLE action (tells the car to just cruise forward)
-#     # If your gym version is older, you might only get 4 return values instead of 5
-#     obs, reward, done, truncated, info = env.step(1)
-
-#     env.render()
-
-#     time.sleep(0.2) # <--- Add this to slow down the frame rate
-
-#     # If the car crashes or finishes the route, reset the map
-#     if done or truncated:
-#         env.reset()

@@ -4,6 +4,8 @@ from typing import List, Optional
 
 import torch
 
+# ===== ENVIRONMENT CONFIGURATION CLASSES ====== #
+
 @dataclass
 class EnvActionConfigArgs:
     type: str = "ContinuousAction"
@@ -35,19 +37,62 @@ class Env_ObsArgs:
 
 @dataclass
 class EnvRewardArgs:
+
+    # Blocking and release parameters
+
     release_distance: float = 20.0
 
-    longitudinal_occupancy_longitudinal_corridor: float = 25.0
-    lateral_occupancy_longitudinal_corridor: float = 10.0
-    lane_keeping_corridor: float = 2.0
+    # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
 
-    # Penalties and rewards
+    advadv_baseline_N: int = 5.7
+    advadv_peak_P: float = 5.85
+    advadv_rise_slope_k1: float = 0.8
+    advadv_decay_slope_k2: float = 0.6
+    advadv_rise_shift_a: float = 3.4
+    advadv_decay_shift_b: float = 9.5
+    
+    egoadv_blocking_baseline_N: float = 5.7
+    egoadv_blocking_peak_P: float = 9.5
+    egoadv_blocking_rise_slope_k1: float = 2.4
+    egoadv_blocking_decay_slope_k2: float = 1.3
+    egoadv_blocking_rise_shift_a: float = 1.4
+    egoadv_blocking_decay_shift_b: float = 6.0
 
-    adv_crash_penalty: float = -600.0
+    egoadv_release_baseline_N: float = 5.7
+    egoadv_release_peak_P: float = 9.5
+    egoadv_release_rise_slope_k1: float = 2.4
+    egoadv_release_decay_slope_k2: float = 1.3
+    egoadv_release_rise_shift_a: float = 3.6
+    egoadv_release_decay_shift_b: float = 6.0
 
-    adv_boundary_penalty: float = -50.0
-    adv_boundary_k: float = 20.0
 
+    # Sandwiching and occupancy corridor parameters
+
+    longitudinal_occupancy_longitudinal_corridor: float = 25.0 # meters
+    lateral_occupancy_longitudinal_corridor: float = 10.0  # meters
+    lane_keeping_corridor: float = 2.0 # meters
+
+    ellipse_base_a: float = 20.0      # Base longitudinal radius (meters)
+    ellipse_b: float = 3.5            # Lateral radius (slightly less than a lane width)
+    speed_k: float = 0.5              # How much the ellipse stretches with ego speed
+
+    base_proximity_reward: float = 0.18
+    sandwich_bonus: float = 0.5
+
+    # Lane keeping reward parameters
+
+    max_lane_penalty: float = 0.4
+    boundary_hit_penalty: float = -0.5
+
+    # Simple addition reward parameters
+
+    adv_crash_penalty: float = -6.0
+    ego_crash_penalty: float = -11.0
+    ego_reach_exit_reward: float = 8.0
+    adv_reverse_penalty: float = -2.0
+
+
+    """
     # Adversary-to-Adversary TTC Penalties
 
     adv_adv_ttc_close_penalty: float = -50.0
@@ -71,9 +116,7 @@ class EnvRewardArgs:
 
     adv_release_phase_m: float = 12.5
     adv_release_phase_b: float = -70.0
-
-    ego_crash_penalty: float = -10.0 # scaled down
-    ego_reach_exit_reward: float = 8.0 # scaled down
+    """
 
 @dataclass
 class EnvArgs:
@@ -123,6 +166,8 @@ class EnvArgs:
     def __post_init__(self):
         self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1
 
+
+# ===== RL CONFIGURATION CLASSES ====== #
 
 @dataclass
 class RLArgs:
