@@ -147,6 +147,13 @@ class SandwichingFunction():
         self.lateral_occupancy_longitudinal_corridor = self.args.env.reward.lateral_occupancy_longitudinal_corridor
         self.lane_keeping_corridor = self.args.env.reward.lane_keeping_corridor
 
+        self.ellipse_base_a = 20.0  # Base longitudinal radius (meters)
+        self.ellipse_b = 3.5        # Lateral radius (slightly less than a lane width)
+        self.speed_k = 0.5          # How much the ellipse stretches with ego speed
+        
+        # Calculate dynamic longitudinal radius based on ego speed
+        ellipse_a = ellipse_base_a + speed_k * max(0.0, ego.velocity[0])
+
     def compute_reward(self, zones_occupied) -> float:
         # Example implementation, replace with actual logic
         self.sandwiching_reward = 0.0
@@ -154,9 +161,6 @@ class SandwichingFunction():
             self.sandwiching_reward = 1.0
         return self.sandwiching_reward
 
-        longitudinal_occupancy_longitudinal_corridor = reward_args["longitudinal_occupancy_longitudinal_corridor"]
-        lateral_occupancy_longitudinal_corridor = reward_args["lateral_occupancy_longitudinal_corridor"]
-        lane_keeping_corridor = reward_args["lane_keeping_corridor"]
 
         if not is_release_phase:
             has_front_blocker = False
@@ -170,13 +174,13 @@ class SandwichingFunction():
                 dx = adv.position[0] - ego.position[0]
                 dy = adv.position[1] - ego.position[1]
 
-                # 1. Base Dense Reward: The Risk Ellipse
+                # Base Dense Reward: The Risk Ellipse
                 d_ell = (dx / ellipse_a) ** 2 + (dy / ellipse_b) ** 2
                 if d_ell <= 1.0:
                     # Provides a max of +0.5 base reward per vehicle if perfectly centered
                     ellipse_reward_pool += 0.18 * np.exp(1.0 - d_ell)
 
-                # 2. Track Multiplier Zones using your exact boundaries
+                # Track Multiplier Zones using your exact boundaries
                 
                 # Check Longitudinal Blocking (Front and Back within the same lane)
                 if abs(dy) < lane_keeping_corridor:
