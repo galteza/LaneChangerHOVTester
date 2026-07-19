@@ -12,6 +12,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 from src.env.risk_calculators import PolygonTTCCalculator
 from src.env.reward_functions import (
+    DistanceToEgoRewardFunction,
     LaneKeepingRewardFunction,
     RewardTTCAdvAdvFunction, 
     RewardTTCEgoAdvFunction, 
@@ -399,6 +400,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         sandwiching_reward_calculator = SandwichingRewardFunction()
         simple_reward_calculator = SimpleRewardFunction()
         lane_keeping_reward_calculator = LaneKeepingRewardFunction()
+        dist_to_ego_reward_calculator = DistanceToEgoRewardFunction()
 
         adv_ego_reward_calculator.check_phase(ego.position[0])
 
@@ -407,6 +409,15 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         for i, adv in enumerate(adversaries):
 
             adv_reward = 0.0
+
+            # Calculate distance to ego and apply distance-based reward
+            dist_to_ego = np.linalg.norm(adv.position - ego.position)
+            adv_reward += dist_to_ego_reward_calculator.compute_reward(dist_to_ego)
+
+            # Dont't make the ego go below the speed limit (20 m/s) by driving too close to it
+            if not adv_ego_reward_calculator.is_release_phase:
+                if ego.velocity[0] < 20.0 and dist_to_ego < 10.0:  # If ego is below speed limit and adv is too close
+                    adv_reward += simple_reward_calculator.get_reward("adv_ego_speed_penalty")
 
             # Don't reverse on the highway!
             if adv.velocity[0] < 0:
@@ -439,6 +450,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # ====== PLATOON REWARDS: Rewarding team performance =======
         
         # Try sandwiching the ego
+
+        sandwiching_reward_calculator.check_phase(ego.position[0])
 
         indiv_rewards += sandwiching_reward_calculator.compute_reward(adversaries, ego) 
 

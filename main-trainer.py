@@ -123,7 +123,7 @@ if __name__ == "__main__":
                     writer.add_scalar("losses/actor_loss", actor_loss_val, global_step)
                     writer.add_scalar("losses/alpha", agent.alpha, global_step)
                     for idx in range(RLargs.num_agents):
-                        writer.add_scalar(f"average reward_{idx}", average_reward[idx], global_step)
+                        writer.add_scalar(f"rewards/average reward_{idx}", average_reward[idx], global_step)
                     print(f"Step: {global_step} | SPS: {int(global_step / (time.time() - start_time))} | Reward: {np.mean(reward)} {reward} ")
 
                     writer.flush() # Ensure that all pending events have been written to disk

@@ -65,6 +65,16 @@ class EnvRewardArgs:
     egoadv_release_rise_shift_a: float = 3.6
     egoadv_release_decay_shift_b: float = 6.0
 
+    # Distance to ego reward function
+
+    dist_base1_c1: float = 3.1
+    dist_base2_c2: float = 0
+    dist_base3_c3: float = -3.2
+    dist_down1_a: float = 23
+    dist_down2_b: float = 49.4
+    dist_slope1_k1: float = 0.7
+    dist_slope2_k2: float = 0.2
+
 
     # Sandwiching and occupancy corridor parameters
 
@@ -90,6 +100,7 @@ class EnvRewardArgs:
     ego_crash_penalty: float = -110.0
     ego_reach_exit_reward: float = 80.0
     adv_reverse_penalty: float = -10.0
+    adv_ego_speed_penalty: float = -10.0
 
 
     """

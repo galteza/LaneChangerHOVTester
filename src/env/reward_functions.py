@@ -167,24 +167,44 @@ class RewardTTCEgoAdvFunction(RewardTTCFunction):
 class DistanceToEgoRewardFunction(RewardFunction):
     """
     A reward function that penalizes adversary vehicles based on their distance to the ego vehicle.
+    The farther the adversary is from the ego vehicle, the higher the penalty!
+    We want the adversaries to approach the ego as much as possible.
+
+    Using a double sigmoid step down function.
+
     """
 
     def __init__(self):
         super().__init__()
         self.adv_reward = 0.0
 
+        self.base1_c1 = self.args.env.reward.dist_base1_c1
+        self.base2_c2 = self.args.env.reward.dist_base2_c2
+        self.base3_c3 = self.args.env.reward.dist_base3_c3
+        self.down1_a = self.args.env.reward.dist_down1_a
+        self.down2_b = self.args.env.reward.dist_down2_b
+        self.slope1_k1 = self.args.env.reward.dist_slope1_k1
+        self.slope2_k2 = self.args.env.reward.dist_slope2_k2
+
     def compute_reward(self, distance_to_ego: float) -> float:
-        """
-        Computes the reward based on the distance to the ego vehicle.
-        The closer the adversary is to the ego vehicle, the higher the penalty.
-        """
+
         if distance_to_ego < 0:
             raise ValueError("Distance to ego must be non-negative.")
 
-        # Example linear penalty: closer means more negative reward
-        self.adv_reward = -1.0 / (distance_to_ego + 1e-5)  # Avoid division by zero
+        self.adv_reward = self.base3_c3 + \
+            (self.base1_c1 - self.base2_c2) / (1 + np.exp(self.slope1_k1 * (distance_to_ego - self.down1_a))) + \
+            (self.base2_c2 - self.base3_c3) / (1 + np.exp(self.slope2_k2 * (distance_to_ego - self.down2_b)))
 
         return self.adv_reward
+    
+    def take_data_points(self):
+        """
+        Generates a 1D array of distances to ego and their corresponding rewards for plotting.
+        """
+        distances = np.linspace(0, 50, 500)  # From 0 to 50 meters in increments of 0.1
+        rewards = [self.compute_reward(d) for d in distances]
+        
+        return distances, rewards
 
 
 # ====== SANDWICHING REWARD FUNCTION ====== #
@@ -195,6 +215,12 @@ class SandwichingRewardFunction(RewardFunction):
     """
     A reward function that encourages the adversary vehicles to sandwich the ego vehicle between them, 
     promoting a more challenging environment for the ego vehicle.
+
+    Ellipse is made around the ego vehicle and adversaries are rewarded for being inside the ellipse and 
+    depending on their proximity to the ego.
+
+    Extra rewards for involved vehicles in a sandwich maneuver (front-back or left-right).
+
     """
 
     def __init__(self):
@@ -326,7 +352,7 @@ class LaneKeepingRewardFunction(RewardFunction):
         self.lane_width_m = self.args.env.lane_width_m
         
         self.max_lane_penalty = self.args.env.reward.max_lane_penalty 
-        self.boundary_hit_penalty = -self.args.env.reward.boundary_hit_penalty  # Negative value for hitting boundaries
+        self.boundary_hit_penalty = self.args.env.reward.boundary_hit_penalty  # Negative value for hitting boundaries
 
     def compute_reward(self, vehicle_y: float, left_boundary_y: float, right_boundary_y: float) -> float:
         reward = 0.0
