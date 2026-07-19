@@ -164,6 +164,28 @@ class RewardTTCEgoAdvFunction(RewardTTCFunction):
         self.phase = phase
 
 
+class DistanceToEgoRewardFunction(RewardFunction):
+    """
+    A reward function that penalizes adversary vehicles based on their distance to the ego vehicle.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.adv_reward = 0.0
+
+    def compute_reward(self, distance_to_ego: float) -> float:
+        """
+        Computes the reward based on the distance to the ego vehicle.
+        The closer the adversary is to the ego vehicle, the higher the penalty.
+        """
+        if distance_to_ego < 0:
+            raise ValueError("Distance to ego must be non-negative.")
+
+        # Example linear penalty: closer means more negative reward
+        self.adv_reward = -1.0 / (distance_to_ego + 1e-5)  # Avoid division by zero
+
+        return self.adv_reward
+
 
 # ====== SANDWICHING REWARD FUNCTION ====== #
 

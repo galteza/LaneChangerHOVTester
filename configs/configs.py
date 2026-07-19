@@ -86,10 +86,10 @@ class EnvRewardArgs:
 
     # Simple addition reward parameters
 
-    adv_crash_penalty: float = -6.0
-    ego_crash_penalty: float = -11.0
-    ego_reach_exit_reward: float = 8.0
-    adv_reverse_penalty: float = -2.0
+    adv_crash_penalty: float = -60.0
+    ego_crash_penalty: float = -110.0
+    ego_reach_exit_reward: float = 80.0
+    adv_reverse_penalty: float = -10.0
 
 
     """
