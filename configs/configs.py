@@ -44,19 +44,19 @@ class EnvRewardArgs:
 
     # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
 
-    advadv_baseline_N: int = 5.7
+    advadv_baseline_N: float = 5.7
     advadv_peak_P: float = 5.85
     advadv_rise_slope_k1: float = 0.8
-    advadv_decay_slope_k2: float = 0.6
+    advadv_decay_slope_k2: float = 0.3
     advadv_rise_shift_a: float = 3.4
     advadv_decay_shift_b: float = 9.5
     
     egoadv_blocking_baseline_N: float = 5.7
-    egoadv_blocking_peak_P: float = 9.5
-    egoadv_blocking_rise_slope_k1: float = 2.4
-    egoadv_blocking_decay_slope_k2: float = 1.3
+    egoadv_blocking_peak_P: float = 20
+    egoadv_blocking_rise_slope_k1: float = 7.0
+    egoadv_blocking_decay_slope_k2: float = 0.8
     egoadv_blocking_rise_shift_a: float = 1.4
-    egoadv_blocking_decay_shift_b: float = 6.0
+    egoadv_blocking_decay_shift_b: float = 3.0
 
     egoadv_release_baseline_N: float = 5.7
     egoadv_release_peak_P: float = 9.5
@@ -68,7 +68,7 @@ class EnvRewardArgs:
     # Distance to ego reward function
 
     dist_base1_c1: float = 3.1
-    dist_base2_c2: float = 0
+    dist_base2_c2: float = -0.5
     dist_base3_c3: float = -3.2
     dist_down1_a: float = 23
     dist_down2_b: float = 49.4
@@ -86,21 +86,32 @@ class EnvRewardArgs:
     ellipse_b: float = 3.5            # Lateral radius (slightly less than a lane width)
     speed_k: float = 0.5              # How much the ellipse stretches with ego speed
 
-    base_proximity_reward: float = 0.18
-    sandwich_bonus: float = 0.5
+    base_proximity_reward: float = 0.50
+    sandwich_bonus: float = 1.0
 
     # Lane keeping reward parameters
 
     max_lane_penalty: float = 0.4
-    boundary_hit_penalty: float = -0.5
+    boundary_hit_penalty: float = -0.3
+
+    # Adversarial crash parameters
+
+    adv_crash_base_penalty_A: float = -60.0 # Don't crash yourself!
+    adv_crash_wideness_k: float = 60.0 # How wide the exp decay function is
+    adv_crash_yoffset_B: float = 0.0 # How much the exp decay function is shifted up or down
+
+    # Speed matching parameters
+
+    adv_speed_matching_base_reward_A: float = 0.5
+    adv_speed_matching_wideness_k: float = 16 # How wide the exp decay function is
+    adv_speed_matching_yoffset_B: float = -0.5 # How much the exp decay function is shifted up or down
 
     # Simple addition reward parameters
 
-    adv_crash_penalty: float = -60.0
-    ego_crash_penalty: float = -110.0
-    ego_reach_exit_reward: float = 80.0
-    adv_reverse_penalty: float = -10.0
-    adv_ego_speed_penalty: float = -10.0
+    ego_crash_penalty: float = -110.0 # Don't make ego crash!
+    ego_reach_exit_reward: float = 80.0 # Let ego reach exit!
+    adv_reverse_penalty: float = -10.0 # Don't reverse!
+    adv_ego_speed_penalty: float = -10.0 # Don't make ego go below speed lim
 
 
     """
@@ -156,7 +167,8 @@ class EnvArgs:
     # Vehicle configuration
     vehicles_count: int = 20          # Total ambient cars
     controlled_vehicles: int = 0 # defined post init
-    adv_crash_penalization: List[bool] = field(default_factory=lambda: [False]*10)
+    adv_crash_penalization: List[bool] = field(default_factory=lambda: [False])
+    adv_step_since_crash_counter: List[bool] = field(default_factory=lambda: [False])
     adv_rewards: List[float] = field(default_factory=lambda: [0.0]*10)
     vehicle_density: float = 0.0
     initial_lane_id: int = 0
@@ -176,6 +188,8 @@ class EnvArgs:
 
     def __post_init__(self):
         self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1
+        self.adv_crash_penalization = self.controlled_vehicles * [False]
+        self.step_since_crash_counter = self.controlled_vehicles * [0]
 
 
 # ===== RL CONFIGURATION CLASSES ====== #
