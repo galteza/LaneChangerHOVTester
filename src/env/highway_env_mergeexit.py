@@ -12,6 +12,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 from src.env.risk_calculators import PolygonTTCCalculator
 from src.env.reward_functions import (
+    AdversarialCrashPenalty,
     DistanceToEgoRewardFunction,
     LaneKeepingRewardFunction,
     RewardTTCAdvAdvFunction, 
@@ -391,7 +392,6 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # Initializing the rewards
 
         indiv_rewards = np.zeros(len(adversaries), dtype=np.float32)
-        team_reward = 0.0
 
         # Splitting bullying into two phases: (1) blocking the ego from reaching the exit ramp, and (2) allowing the ego to reach the exit ramp successfully
 
@@ -401,6 +401,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         simple_reward_calculator = SimpleRewardFunction()
         lane_keeping_reward_calculator = LaneKeepingRewardFunction()
         dist_to_ego_reward_calculator = DistanceToEgoRewardFunction()
+        adv_crash_penalty_calculator = AdversarialCrashPenalty()
 
         adv_ego_reward_calculator.check_phase(ego.position[0])
 
@@ -424,8 +425,9 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 adv_reward += simple_reward_calculator.get_reward("adv_reverse_penalty")
 
             # Drive safe!
-            if adv.crashed and not self.config["adv_crash_penalization"][i]:
-                adv_reward += simple_reward_calculator.get_reward("adv_crash_penalty")
+            if self.config["adv_crash_penalization"][i]:
+                step_since_crash = self.config["adv_step_since_crash_counter"][i]
+                adv_reward += adv_crash_penalty_calculator.compute_reward(step_since_crash)
 
             # If adversary driving too close to boundary
 
@@ -478,7 +480,13 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             if self._is_out_of_bounds(vehicle) and vehicle in self.controlled_vehicles:
                 
                 vehicle.crashed = True
-                self.config["adv_crash_penalization"][self.controlled_vehicles.index(vehicle)] = True
+                
+
+            if vehicle.crashed and vehicle in self.controlled_vehicles:
+                vehicle_idx = self.controlled_vehicles.index(vehicle)
+                self.config["adv_crash_penalization"][vehicle_idx] = True
+                self.config["adv_step_since_crash_counter"][vehicle_idx] += 1
+            
 
         # Grab new observations, rewards, and termination/truncation flags
 
