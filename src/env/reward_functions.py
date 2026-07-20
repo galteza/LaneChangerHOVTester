@@ -384,7 +384,49 @@ class LaneKeepingRewardFunction(RewardFunction):
         rewards = [amplitude * np.cos((2 * np.pi / self.lane_width_m) * y) - amplitude for y in y_values]
         
         return y_values, rewards
+    
+class AdversarialCrashPenalty(RewardFunction):
+    """
+    Penalize adversary for every moment it's in a crash state.
 
+    Modeled as an exp decay function.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        self.adv_crash_base_penalty_A = self.args.env.reward.adv_crash_base_penalty_A
+        self.adv_crash_wideness_k = self.args.env.reward.adv_crash_wideness_k
+        self.adv_crash_yoffset_B = self.args.env.reward.adv_crash_yoffset_B
+
+    def compute_reward(self, step_since_crash):
+        reward = self.adv_crash_base_penalty_A * np.exp(-step_since_crash/self.adv_crash_wideness_k) + self.adv_crash_yoffset_B
+
+        return reward
+
+    def take_data_points(self):
+        y_values = np.linspace(0.0, 250.0, 251)
+
+        rewards = [self.compute_reward(y) for y in y_values]
+
+        return y_values, rewards
+        
+
+class SpeedMatchingRewardFunction(RewardFunction):
+    """
+    Penalizes adversary as its relative speed with ego increases.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        self.adv_speed_matching_base_reward_A = self.args.env.reward.adv_speed_matching_base_reward_A
+        self.adv_speed_matching_wideness_k = self.args.env.reward.adv_speed_matching_wideness_k
+        self.adv_speed_matching_yoffset_B = self.args.env.reward.adv_speed_matching_yoffset_B
+
+    def compute_reward(self, relative_speed):
+        
+        return self.adv_speed_matching_base_reward_A * np.exp(-relative_speed/self.adv_speed_matching_wideness_k) + self.adv_speed_matching_yoffset_B
 
 
 # ===== VISUALIZATION CLASS ====== #
