@@ -33,7 +33,7 @@ if __name__ == "__main__":
     specific_run_dir = None # "runs/merge_exit_highway__configs__1__20260716-183711"
 
     # Set to a specific episode integer (e.g., 500), or None to use the default fallback logic.
-    specific_episode = 910000 
+    specific_episode = None 
     # ---------------------
 
     # Determine the run directory (try specific first, fallback to newest)
