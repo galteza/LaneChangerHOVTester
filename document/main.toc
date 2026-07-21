@@ -6,15 +6,20 @@
 \contentsline {subsection}{\numberline {0.2.2}Reinforcement Learning}{3}{}%
 \contentsline {subsubsection}{Soft Actor-Critic Reinforcement Learning}{4}{}%
 \contentsline {subsubsection}{Multi-Agent Reinforcement Learning}{4}{}%
-\contentsline {section}{\numberline {0.3}Objectives}{4}{}%
-\contentsline {section}{\numberline {0.4}Methodology}{4}{}%
-\contentsline {subsection}{\numberline {0.4.1}Highway Environment}{4}{}%
-\contentsline {subsubsection}{Observation Space}{5}{}%
-\contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{5}{}%
-\contentsline {subsubsection}{Reward Function}{6}{}%
-\contentsline {subsubsection}{}{6}{}%
-\contentsline {section}{\numberline {0.5}Results \& Discussion}{6}{}%
-\contentsline {section}{\numberline {0.6}Conclusion}{6}{}%
-\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{6}{}%
-\contentsline {section}{\numberline {0.7}Appendix}{6}{}%
-\contentsline {subsubsection}{LC Global Planner}{6}{}%
+\contentsline {subsection}{\numberline {0.2.3}Farama Foundation Gymnasium & Highway Environment Libraries}{4}{}%
+\contentsline {subsubsection}{Typical Training Pipeline}{4}{}%
+\contentsline {subsubsection}{Highway-Env Environment Initialization}{5}{}%
+\contentsline {section}{\numberline {0.3}Objectives}{5}{}%
+\contentsline {section}{\numberline {0.4}Methodology}{5}{}%
+\contentsline {subsection}{\numberline {0.4.1}Highway Environment}{5}{}%
+\contentsline {subsubsection}{Important Configurations}{5}{}%
+\contentsline {subsubsection}{Road Geometry}{6}{}%
+\contentsline {subsubsection}{Observation Space}{6}{}%
+\contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{7}{}%
+\contentsline {subsubsection}{Reward Function}{8}{}%
+\contentsline {subsubsection}{}{9}{}%
+\contentsline {section}{\numberline {0.5}Results \& Discussion}{9}{}%
+\contentsline {section}{\numberline {0.6}Conclusion}{9}{}%
+\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{9}{}%
+\contentsline {section}{\numberline {0.7}Appendix}{9}{}%
+\contentsline {subsubsection}{LC Global Planner}{9}{}%

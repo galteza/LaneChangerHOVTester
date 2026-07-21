@@ -1,4 +1,4 @@
-This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  17 JUL 2026 21:38
+This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  20 JUL 2026 20:25
  restricted system commands enabled.
  file:line:error style messages enabled.
 **/home/gabalteza/LaneChangerHOVTester/document/main
@@ -773,54 +773,62 @@ LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
 (Font)              scaled to size 7.69775pt on input line 138.
 LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
 (Font)              scaled to size 5.77332pt on input line 138.
- [3]
-Overfull \hbox (5.25682pt too wide) in paragraph at lines 185--188
+
+/home/gabalteza/LaneChangerHOVTester/document/main.tex:181: Misplaced alignment tab character &.
+<argument> Farama Foundation Gymnasium &
+                              Highway Environment Libraries
+l.181 ... Gymnasium & Highway Environment Libraries}
+                                                  
+I can't figure out why you would want to use a tab mark
+here. If you just want an ampersand, the remedy is
+simple: Just type `I\&' now. But if some right brace
+up above has ended a previous alignment prematurely,
+you're probably due for more error messages, and you
+might try typing `S' now just to see what is salvageable.
+
+[3]
+
+LaTeX Warning: Reference `fig:gym_training_pipeline' on page 4 undefined on input line 189.
+
+[4]
+Overfull \hbox (5.25682pt too wide) in paragraph at lines 232--235
 []\TU/lmr/m/n/12 To cre-ate a multi-lane high-way en-vi-ron-ment that sim-u-lates a highway-traversing
  []
 
+[5]
 
-/home/gabalteza/LaneChangerHOVTester/document/main.tex:210: LaTeX Error: There's no line here to end.
+LaTeX Warning: Reference `fig:highway_env' on page 6 undefined on input line 273.
 
-See the LaTeX manual or LaTeX Companion for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.210 \newline
-            
-Your command was ignored.
-Type  I <command> <return>  to replace it with another command,
-or  <return>  to continue without it.
-
-[4]
+[6] [7]
 LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 7.69775pt on input line 267.
+(Font)              scaled to size 7.69775pt on input line 351.
 LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 5.77332pt on input line 267.
- [5]
+(Font)              scaled to size 5.77332pt on input line 351.
 
-LaTeX Warning: Citation `7637091' on page 6 undefined on input line 300.
 
-[6]
-Overfull \hbox (11.81291pt too wide) in paragraph at lines 311--312
+LaTeX Warning: Citation `7637091' on page 8 undefined on input line 384.
+
+[8]
+Overfull \hbox (11.81291pt too wide) in paragraph at lines 395--396
 []\TU/lmr/m/n/12 The four equa-tions rep-re-sent-ing the above nor-mal-ized lane-utility val-ues $\OML/cmm/m/it/12 U[]$\TU/lmr/m/n/12 ,
  []
 
 
-LaTeX Warning: Reference `eq:totalutility' on page 7 undefined on input line 328.
+LaTeX Warning: Reference `eq:totalutility' on page 9 undefined on input line 412.
+
+[9]
+
+LaTeX Warning: Reference `eq: desiredlane' on page 10 undefined on input line 421.
 
 
-LaTeX Warning: Reference `eq: desiredlane' on page 7 undefined on input line 337.
+LaTeX Warning: Reference `eq: gaputility' on page 10 undefined on input line 429.
 
 
-LaTeX Warning: Reference `eq: gaputility' on page 7 undefined on input line 345.
+LaTeX Warning: Reference `eq: gaputilityduration' on page 10 undefined on input line 446.
 
-[7]
-
-LaTeX Warning: Reference `eq: gaputilityduration' on page 8 undefined on input line 362.
-
-[8] [9]
+[10] [11]
 No file main.bbl.
-[10] (./main.aux)
+[12] (./main.aux)
 
 LaTeX Warning: There were undefined references.
 
@@ -830,19 +838,19 @@ LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
 )
 
 Here is how much of LuaTeX's memory you used:
- 8368 strings out of 477805
+ 8370 strings out of 477805
  305785,662416 words of node,token memory allocated
- 29651 words of node memory still in use:
-   11 hlist, 2 vlist, 5 rule, 2 glue, 395 kern, 1 glyph, 10435 attribute, 1046 glue_spec, 540 attribute_list, 1 write, 61 user_defined nodes
-   avail lists: 1:41,2:75827,3:129,4:236,5:189,6:42,7:7550,8:71,9:690,10:26,11:576
- 28640 multiletter control sequences out of 65536+600000
+ 32116 words of node memory still in use:
+   11 hlist, 2 vlist, 5 rule, 2 glue, 395 kern, 1 glyph, 10809 attribute, 1363 glue_spec, 562 attribute_list, 1 write, 83 user_defined nodes
+   avail lists: 1:41,2:75430,3:165,4:183,5:198,6:42,7:7550,8:71,9:487,10:26,11:576
+ 28642 multiletter control sequences out of 65536+600000
  67 fonts using 54666047 bytes
- 100i,19n,99p,1829b,330s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 100i,19n,99p,1829b,357s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/share/texmf/fonts/opentype/public/lm/lmroman6-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman8-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-bold.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-regular.otf></usr/share/texlive/texmf-dist/fonts/truetype/public/ipaex/ipaexm.ttf></usr/share/texmf/fonts/opentype/public/lm/lmroman17-regular.otf></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (11 pages, 780310 bytes).
+Output written on main.pdf (13 pages, 788035 bytes).
 
-PDF statistics: 127 PDF objects out of 1000 (max. 8388607)
- 80 compressed objects within 1 object stream
+PDF statistics: 133 PDF objects out of 1000 (max. 8388607)
+ 84 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 131072)
  1 words of extra memory for PDF output out of 10000 (max. 100000000)
 

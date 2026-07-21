@@ -178,6 +178,53 @@ return (using policy gradients)
 \subsubsection{Soft Actor-Critic Reinforcement Learning}
 \subsubsection{Multi-Agent Reinforcement Learning}
 
+\subsection{Farama Foundation Gymnasium & Highway Environment Libraries}
+
+The Farama Foundation has been a long-time provider of extensive libraries for reinforcement learning research and simulations. The Highway-Env library is a library
+that is built off of the Gymnasium library, which is a library that provides a framework for creating customisable environments, as well as premade environments, such as 
+the double pendulum and the cart-pole.
+
+\subsubsection{Typical Training Pipeline}
+
+Figure \ref{fig:gym_training_pipeline} displays the generalized training process that the Gymnasium library utilizes.
+
+Upon initialization of the environment, one is provided with a pair of outputs, which consists of (1) the initial observation matrix, that quantifies the current state of the environment and its agents, 
+and (2) info, which is a dictionary of additional information about the environment, used for debugging and analysis purposes.
+
+With every step of the environment, the current observation matrix is fed into an arbitrary policy to receive a set of actions for which the agents of the environment are then tasked to enact.
+Using the actions from the arbitrary policy, they are then fed back into the environment to step the current state into the next state, which then provides a set of five outputs:
+
+\begin{enumerate}
+    \item an observation matrix, that quantifies the next state of the environment and its agents;
+    \item a reward matrix, that represents the quantifiable results of an agent's actions;
+    \item a termination boolean, that indicates whether the episode has just been terminated
+    \item a truncation boolean, that indicates whether the episode has just been truncated
+    \item info, which is a dictionary of additional information about the updated environment
+\end{enumerate}
+
+Typically, in the case of reinforcement learning, the aforementioned arbitrary policy is replaced with a policy that is undergoing training based on the information of 
+the current observation matrix, next observation matrix, and the reward matrix that represents whether the actions taken by the agents were appropriate or not. 
+The training process is repeated until the policy converges to a robust policy for use in testing and evaluation.
+
+The Highway-Env library is a library that provides a set of pre-built environments that simulate various highway driving scenarios.
+
+\subsubsection{Highway-Env Environment Initialization}
+
+Highway-Env and Gymnasium are both Python class-based libraries that allow the creation of environments of any imaginable geometry for simulating various highway 
+driving scenarios. Each object or entity in the environment is represented as a class, thereby providing a modular and object-oriented approach to the creation 
+of road objects and entities that fit the needs of the researcher.
+
+Upon initialization of the highway environment, one is asked to provide a set of configurations that define the how the observation and action spaces of the environment are executed.
+All environments are initialized with an observation space and an action space.
+The observation space is the input of the environment, which is a set of numbers that describe the current state of the environment. 
+The action space is the output of the environment, which is a set of numbers that describe the possible actions that can be taken in the environment.
+
+A "Built with the goal of machine learning training in mind, in every step of a simulation in a particular environment with Gymansium, the environment returns (1) an observation matrix, that
+quantifies the current state of the environment and its agents; (2) a reward matrix, that represents the results of the agent's actions; 
+(3) a next-observation matrix, that represents the state of the environment after the agent's actions; (4) a boolean of whether the episode has terminated.
+and a boolean of  
+
+
 \section{Objectives}
 
 The objective of this research is detailed as follows: 
@@ -186,28 +233,32 @@ The objective of this research is detailed as follows:
     the ego vehicle is tasked to conduct lane changes to reach the desired exit lane, while the other 
     vehicles are tasked to bully the ego vehicle into high-risk scenarios without actually crashing into it.
     \item To implement the baseline IDM + MOBIL model in an ego lane-changing vehicle's goal of reaching the desired exit
-    \item To implement a multi-agent soft actor-critic reinforcement learning framework to control the adverasarial platoon
-    \item 
-\end{enumerate}to create a multi-lane highway environment, which is designed to
-simulate a highway-traversing scenario where the ego vehicle is tasked to conduct lane changes to reach
-the desired exit lane, while the other vehicles are tasked to bully the ego vehicle into high-risk scenarios
-without actually crashing into it.
+    \item To implement a multi-agent soft actor-critic reinforcement learning framework to control the adversarial platoon
+    \item To evaluate the diversity and breadth of scope of scenario generation of the trained adversarial platoon
+\end{enumerate}
 
 \section{Methodology}
 \subsection{Highway Environment}
 
+\subsubsection{Important Configurations}
+
 The highway environment used a custom-made environment using the Python Gymnasium and Highway-Env libaries.
-The environment is a modified class of the AbstractEnv class of the Highway-Env library, which is a Python 
-library that allows the creation of environments of any imaginable geometry for simulating various highway 
-driving scenarios. 
+
+The highway environment of this research was a modified class of the AbstractEnv class of the Highway-Env library. In the customization of an AbstractEnv,
+the proponent was required to declare the configurations of the environment, as seen in Appendix A, which contains the type of Observation and Action spaces (i.e., input
+of the environment).
+
+The action space of the highway environment was of the MultiAgentAction class, which is a two-dimensional action space that contains a total of $n$ vehicles taking $m$ actions, where $n$ is the number of vehicles in the environment and $m$ is the number of actions that each vehicle can take. The action space was designed to be discrete, with each vehicle having a total of 5 actions to choose from:
+ContinuousAction
+
+Kinematics
 
 The adversarial vehicles, hereafter referred to as the "adversaries," are controlled by a multi-agent soft 
 actor-critic reinforcement learning agent, and the other vehicles are controlled by a predefined baseline 
 behavior model, specifically the IDM + MOBIL model.
 
+\subsubsection{Road Geometry}
 
-
-\newline
 
 The specifics of the environment are as follows:
 
@@ -219,42 +270,75 @@ The specifics of the environment are as follows:
     \item 1 ego vehicle coming from merging lane, 2 adversarial vehicles coming from cruising lanes
 \end{itemize}
 
-In the 
+Figure \ref{fig:highway_env} shows the schematic of the highway environment used in this research. The blue vehicle is the ego lane-changing vehicle
+controlled by the IDM + MOBIL model, whereas the green vehicles are the adversarial vehicles controlled by MASAC-RL.
 
 \subsubsection{Observation Space}
 
 The observation space of the highway environment is the part of the reinforcement learning framework that
 provides the agent with the necessary numbers that describe its workable environment.
-As such, the observation space must be designed in a way that balances the need for necessary information 
-that does not bloat the observation space with unnecessary or redundant details that
+As such, the observation space was designed in a way that balanced the need for necessary information 
+that did not bloat the observation space with redundant details that
 may hinder the learning process of the agent.
 
-In the
+The original observation space provided by the highway environment library is of the MultiAgentObservation class, which is a three-dimensional observation space 
+that contains a total of $n$ vehicles observing $n$ vehicles (including itself) for six of its features:
+
+\begin{enumerate}
+    \item Presence (i.e., the vehicle is on screen or not): 0 for not present, 1 for present
+    \item Absolute longitudinal distance of the vehicle from the start of the highway: measured in meters
+    \item Absolute lateral distance of the vehicle from the left boundary of the highway: measured in meters
+    \item Longitudinal speed of the vehicle: measured in meters per second
+    \item Lateral speed of the vehicle: measured in meters per second
+    \item Heading angle of the vehicles: measured in radians
+\end{enumerate}
+
+The observation space was taken and modified to reduce space bloating for the agent training process.
 
 \subsection{MASAC-RL Framework}
 
-Shared parameters are used for the actor and critic networks of the adversarial vehicles, especially as 
-vehicles are presumed to be homogeneous in their behavior and dynamics. Each of the actor and critic networks
-are to be fed the observational inputs of all the vehicles in each step chosen for training, once per adversarial 
-vehicle's unique observation.
+Each of the adversaries' actor and critic networks used the same shared parameters, especially as
+vehicles in the highway environment were set to be homogeneous in their behavior and dynamics.
 
-The actor input space for an adversarial vehicle would include the following:
+The proponent of this research decided to transform the three-dimensional observation space of the highway environment into a flat one-dimensional observation
+space for use as input in the actor and critic networks of the MASAC-RL framework. The input space of the actor network consists of the following observations lifted
+from the raw values of the original observation space provided by the highway environment:
+
 \begin{itemize}
     \item Self-observation
     \begin{enumerate}
         \item Activity status (i.e., crashed or not): 0 for not crashed, 1 for crashed
-        \item Lateral distance from left boundary
-        \item Longitudinal and lateral position
-        \item Longitudinal and lateral velocity
-        \item Heading angle
+        \item Lateral distance from left boundary, normalized to the highway width: 0~1
+        \item Lateral distance from right boundary, normalized to the highway width: 0~1
+        \item Relative longitudinal distance from ego LC, normalized to the highway length: -1~1
+        \item Relative lateral distance from ego LC, normalized to the highway width: -1~1
+        \item Longitudinal speed, normalized to maximum allowable speed: 0~1
+        \item Lateral velocity, normalized to $\frac{1}{\sqrt{2}}$ of the maximum allowable speed: 0~1
     \end{enumerate}
     \item Ego LC observation
+    \begin{enumerate}
+        \item Longitudinal distance from the exit ramp, normalized to the highway length: 0~1
+        \item Lateral distance from the exit ramp, normalized to the highway width: 0~1
+        \item Relative longitudinal speed, normalized to twice the maximum allowable speed: -1~1
+        \item Relative lateral speed, normalized to $\frac{2}{\sqrt{2}}$ the maximum allowable speed: -1~1
+        \item $1/(\mathrm{2D TTC} + 1)$ with the 0~1 main adversary vehicle: 0~1
+    \end{enumerate}
     \item Other-adversary observation
-    Ego vehicle's longitudinal and lateral position, velocity, and heading angle
-    \item Adversarial vehicle's longitudinal and lateral position, velocity, and heading angle
-    \item Leading vehicle's longitudinal and lateral position, velocity, and heading angle
-    \item Following vehicle's longitudinal and lateral position, velocity, and heading angle
+    \begin{enumerate}
+        \item Relative longitudinal distance from the main adversary vehicle, normalized to the highway length: -1~1
+        \item Relative lateral distance from the main adversary vehicle, normalized to the highway width: -1~1
+        \item Relative longitudinal speed from the main adversary vehicle, normalized to twice the maximum allowable speed: -1~1
+        \item Relative lateral speed from the main adversary vehicle, normalized to $\frac{2}{\sqrt{2}}$ the maximum allowable speed: -1~1
+        \item $1/(\mathrm{2D TTC} + 1)$ with the main adversary vehicle: 0~1
+    \end{enumerate}
 \end{itemize}
+
+Each of the actor and critic networks
+were fed the observational inputs of all the vehicles in each step chosen for training, once per adversarial 
+vehicle's unique observation.
+
+
+
 
 \subsubsection{Reward Function}
 
