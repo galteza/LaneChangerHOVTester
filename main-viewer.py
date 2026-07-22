@@ -1,4 +1,5 @@
 import gymnasium as gym
+import random
 import torch
 import time
 import os
@@ -108,7 +109,7 @@ if __name__ == "__main__":
     model.actor.load_state_dict(torch.load(actor_path, map_location=device))
     model.actor.eval() # Set network to evaluation mode (turns off dropout/batchnorm updates if any)
 
-    obs, info = env.reset()
+    obs, info = env.reset(seed=random.randint(0, 1000))
 
     # env.unwrapped.vehicle = env.unwrapped.road.vehicles[0]
 
@@ -125,6 +126,7 @@ if __name__ == "__main__":
             action = model.get_action(obs) 
             
             obs, reward, terminated, truncated, info = env.step(action)
+
             env.render()
             
             # Adjust sleep time if the simulation renders too fast or too slow
@@ -132,7 +134,7 @@ if __name__ == "__main__":
             
             if terminated or truncated:
                 print("Episode finished. Resetting environment...")
-                obs, info = env.reset()
+                obs, info = env.reset(seed=random.randint(0, 1000))
 
                 if hasattr(base_env.unwrapped, "viewer") and base_env.unwrapped.viewer is not None:
                     base_env.unwrapped.viewer.observer_vehicle = base_env.unwrapped.road.vehicles[0]
