@@ -112,3 +112,33 @@ class PolygonTTCCalculator:
         
         return min(cls._pairwise_ttc(params_i, params_j), cls._pairwise_ttc(params_j, params_i))
     
+
+
+class THWCalculator:
+    """
+    A high-performance NumPy utility class to compute the Time Headway (THW)
+    between two vehicles.
+    """
+    
+    @classmethod
+    def compute_thw(cls, veh_i, veh_j) -> float:
+        """
+        Public API: Call this to get the THW between two highway-env vehicles.
+        """
+        # Ensure that veh_j is ahead of veh_i in the direction of travel
+        rear_vehicle = veh_i if veh_i.position[0] > veh_j.position[0] else veh_j
+        front_vehicle = veh_j if rear_vehicle == veh_i else veh_i
+
+        relative_position = np.array(front_vehicle.position) - np.array(rear_vehicle.position)
+        forward_vector = np.array([np.cos(rear_vehicle.heading), np.sin(rear_vehicle.heading)])
+        
+        if np.dot(relative_position, forward_vector) <= 0:
+            return np.inf
+        
+        distance = np.linalg.norm(relative_position)
+        speed_i = getattr(rear_vehicle, 'speed', 0.0)
+        
+        if speed_i <= 1e-5:
+            return np.inf  # Avoid division by zero
+        
+        return distance / speed_i
