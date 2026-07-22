@@ -10,7 +10,7 @@ from highway_env.road.lane import StraightLane, LineType, SineLane
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
-from src.env.risk_calculators import PolygonTTCCalculator
+from src.env.risk_calculators import PolygonTTCCalculator, THWCalculator
 from src.env.reward_functions import (
     AdversarialCrashPenalty,
     DistanceToEgoRewardFunction,
@@ -442,8 +442,10 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             
             # Bully the ego!
             adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
+            adv_ego_thw = THWCalculator.compute_thw(adv, ego)
+
             adv_ego_reward_calculator.check_phase(ego.position[0])
-            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc)
+            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc, adv_ego_thw)
 
             # Consolidate rewards
 
@@ -478,14 +480,21 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # Crash if driving out of bounds (off the road)
         for vehicle in self.road.vehicles:
             if self._is_out_of_bounds(vehicle) and vehicle in self.controlled_vehicles:
-                
                 vehicle.crashed = True
-                
 
             if vehicle.crashed and vehicle in self.controlled_vehicles:
                 vehicle_idx = self.controlled_vehicles.index(vehicle)
                 self.config["adv_crash_penalization"][vehicle_idx] = True
                 self.config["adv_step_since_crash_counter"][vehicle_idx] += 1
+
+            if vehicle in self.controlled_vehicles:
+
+                if PolygonTTCCalculator.compute_ttc(vehicle, self.ego) <= 4.0:  # Example condition
+                    vehicle.color = (128, 0, 128)  # Orange color for both vehicles
+                    self.ego.color = (128, 0, 128)  # Orange color for both vehicles
+                else:
+                    vehicle.color = None  # Reset to default color
+                    self.ego.color = None  # Reset to default color
             
 
         # Grab new observations, rewards, and termination/truncation flags
@@ -504,6 +513,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         return obs, reward, terminated, truncated, {}
 
 class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
+
     def __init__(self, env):
 
         """

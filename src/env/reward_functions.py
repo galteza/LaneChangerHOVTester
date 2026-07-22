@@ -163,6 +163,37 @@ class RewardTTCEgoAdvFunction(RewardTTCFunction):
             raise ValueError("Phase must be either 'BLOCKING' or 'RELEASE'.")
         self.phase = phase
 
+class RewardTHWAdvEgoFunction(RewardFunction):
+    """
+    A specialized reward function that penalizes the adversary vehicle based on its Time Headway (THW) with the ego vehicle.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        self.thw_base_reward_A = self.args.env.reward.thw_base_reward_A
+        self.thw_wideness_k = self.args.env.reward.thw_wideness_k
+        self.thw_yoffset_B = self.args.env.reward.thw_yoffset_B
+
+    def compute_reward(self, thw) -> float:
+        """
+        Computes the reward based on the Time Headway (THW) between the adversary and ego vehicle.
+        """
+        if thw < 0:
+            raise ValueError("Time Headway (THW) must be non-negative.")
+
+        reward = self.thw_base_reward_A * np.exp(-thw / self.thw_wideness_k) + self.thw_yoffset_B
+        return reward
+    
+    def take_data_points(self):
+        """
+        Generates a 1D array of Time Headway (THW) values and their corresponding rewards for plotting.
+        """
+        thw_values = np.linspace(0, 10, 500)  # From 0 to 10 seconds in increments of 0.02
+        rewards = [self.compute_reward(thw) for thw in thw_values]
+        
+        return thw_values, rewards
+
 
 class DistanceToEgoRewardFunction(RewardFunction):
     """
@@ -428,6 +459,13 @@ class SpeedMatchingRewardFunction(RewardFunction):
         
         return self.adv_speed_matching_base_reward_A * np.exp(-relative_speed/self.adv_speed_matching_wideness_k) + self.adv_speed_matching_yoffset_B
 
+    def take_data_points(self):
+        v_values = np.linspace(0.0, 80.0, 251)
+
+        rewards = [self.compute_reward(v) for v in v_values]
+
+        return v_values, rewards
+
 
 # ===== VISUALIZATION CLASS ====== #
 
@@ -441,12 +479,22 @@ class FunctionVisualizer:
                  reward_ttc_ego_adv_function: RewardTTCEgoAdvFunction = None, 
                  reward_ttc_adv_adv_function: RewardTTCAdvAdvFunction = None, 
                  sandwiching_reward_function: SandwichingRewardFunction = None,
-                 lane_keeping_reward_function: LaneKeepingRewardFunction = None):
+                 lane_keeping_reward_function: LaneKeepingRewardFunction = None,
+                 adversarial_crash_penalty: AdversarialCrashPenalty = None,
+                 distance_to_ego_reward_function: DistanceToEgoRewardFunction = None,
+                 speed_matching_reward_function: SpeedMatchingRewardFunction = None,
+                 reward_thw_adv_ego_function: RewardTHWAdvEgoFunction = None,
+                 ):
         
         self.reward_ttc_ego_adv_function = reward_ttc_ego_adv_function
         self.reward_ttc_adv_adv_function = reward_ttc_adv_adv_function
         self.sandwiching_reward_function = sandwiching_reward_function
         self.lane_keeping_reward_function = lane_keeping_reward_function
+        self.adversarial_crash_penalty = adversarial_crash_penalty
+        self.distance_to_ego_reward_function = distance_to_ego_reward_function
+        self.speed_matching_reward_function = speed_matching_reward_function
+        self.reward_thw_adv_ego_function = reward_thw_adv_ego_function
+    
 
     def plot_ttc_functions(self):
         """
@@ -472,6 +520,26 @@ class FunctionVisualizer:
 
         plt.title('Reward Function based on Time-to-Collision (TTC)')
         plt.xlabel('Time-to-Collision (seconds)')
+        plt.ylabel('Reward')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        plt.show()
+
+    def plot_thw_function(self):
+        """
+        Plots the 1D line graph for the Time Headway (THW) reward function.
+        """
+        if not self.reward_thw_adv_ego_function:
+            print("No THW reward function provided to visualize.")
+            return
+
+        thw_vals, rewards = self.reward_thw_adv_ego_function.take_data_points()
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(thw_vals, rewards, label='Adv-Ego Reward vs THW', color='green', linewidth=2)
+        
+        plt.title('Reward Function based on Time Headway (THW)')
+        plt.xlabel('Time Headway (seconds)')
         plt.ylabel('Reward')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
@@ -540,10 +608,77 @@ class FunctionVisualizer:
         
         plt.show()
 
+    def plot_adversarial_crash_penalty(self):
+        """
+        Plots the 1D exponential decay for the adversarial crash penalty.
+        """
+        if not self.adversarial_crash_penalty:
+            print("No AdversarialCrashPenalty provided to visualize.")
+            return
+            
+        steps, rewards = self.adversarial_crash_penalty.take_data_points()
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(steps, rewards, label='Adversarial Crash Penalty', color='red', linewidth=2)
+        
+        plt.title('Adversarial Crash Penalty (Exponential Decay)')
+        plt.xlabel('Steps Since Crash')
+        plt.ylabel('Penalty')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        plt.show()
+
+    def plot_distance_to_ego_function(self):
+        """
+        Plots the 1D double sigmoid for the distance to ego penalty.
+        """
+        if not self.distance_to_ego_reward_function:
+            print("No DistanceToEgoRewardFunction provided to visualize.")
+            return
+            
+        distances, rewards = self.distance_to_ego_reward_function.take_data_points()
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(distances, rewards, label='Distance to Ego Penalty', color='blue', linewidth=2)
+        
+        plt.title('Distance to Ego Penalty (Double Sigmoid)')
+        plt.xlabel('Distance to Ego (meters)')
+        plt.ylabel('Penalty')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        plt.show()
+
+    def plot_speed_matching_function(self):
+        """
+        Plots the 1D exponential decay for the speed matching penalty.
+        """
+        if not self.speed_matching_reward_function:
+            print("No SpeedMatchingRewardFunction provided to visualize.")
+            return
+            
+        relative_speeds, rewards = self.speed_matching_reward_function.take_data_points()
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(relative_speeds, rewards, label='Speed Matching Penalty', color='purple', linewidth=2)
+        
+        plt.title('Speed Matching Penalty (Exponential Decay)')
+        plt.xlabel('Relative Speed (m/s)')
+        plt.ylabel('Penalty')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        plt.show()
+
     def plot_all(self):
         """
         Convenience method to plot all available reward functions.
         """
         self.plot_ttc_functions()
+        self.plot_thw_function()
         self.plot_sandwiching_ellipse()
         self.plot_lane_keeping_function()
+        self.plot_distance_to_ego_function()
+        self.plot_adversarial_crash_penalty()
+        self.plot_speed_matching_function()
