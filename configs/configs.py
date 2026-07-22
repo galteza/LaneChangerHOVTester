@@ -44,8 +44,8 @@ class EnvRewardArgs:
 
     # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
 
-    advadv_baseline_N: float = 5.7
-    advadv_peak_P: float = 5.85
+    advadv_baseline_N: float = 2.0
+    advadv_peak_P: float = 2.0
     advadv_rise_slope_k1: float = 0.8
     advadv_decay_slope_k2: float = 0.3
     advadv_rise_shift_a: float = 3.4
@@ -59,18 +59,24 @@ class EnvRewardArgs:
     egoadv_blocking_decay_shift_b: float = 3.0
 
     egoadv_release_baseline_N: float = 5.7
-    egoadv_release_peak_P: float = 9.5
+    egoadv_release_peak_P: float = 2.0
     egoadv_release_rise_slope_k1: float = 2.4
     egoadv_release_decay_slope_k2: float = 1.3
     egoadv_release_rise_shift_a: float = 3.6
     egoadv_release_decay_shift_b: float = 6.0
+
+    # THW-based reward shaping parameters (Adversary-to-Ego)
+
+    thw_base_reward_A: float = 5.7
+    thw_wideness_k: float = 1.0
+    thw_yoffset_B: float = 0.0
 
     # Distance to ego reward function
 
     dist_base1_c1: float = 3.1
     dist_base2_c2: float = -0.5
     dist_base3_c3: float = -3.2
-    dist_down1_a: float = 23
+    dist_down1_a: float = 10
     dist_down2_b: float = 49.4
     dist_slope1_k1: float = 0.7
     dist_slope2_k2: float = 0.2
