@@ -411,6 +411,11 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
             adv_reward = 0.0
 
+            if adv.crashed and self.config["adv_crash_penalization"][i]:
+                step_since_crash = self.config["adv_step_since_crash_counter"][i]
+                adv_reward += adv_crash_penalty_calculator.compute_reward(step_since_crash)
+                continue # Skip the rest of the reward calculations for this adversary if it has crashed
+
             # Calculate distance to ego and apply distance-based reward
             dist_to_ego = np.linalg.norm(adv.position - ego.position)
             adv_reward += dist_to_ego_reward_calculator.compute_reward(dist_to_ego)
@@ -423,12 +428,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             # Don't reverse on the highway!
             if adv.velocity[0] < 0:
                 adv_reward += simple_reward_calculator.get_reward("adv_reverse_penalty")
-
-            # Drive safe!
-            if self.config["adv_crash_penalization"][i]:
-                step_since_crash = self.config["adv_step_since_crash_counter"][i]
-                adv_reward += adv_crash_penalty_calculator.compute_reward(step_since_crash)
-
+            
             # If adversary driving too close to boundary
 
             left_boundary, right_boundary = self._get_current_lateral_boundaries(adv)

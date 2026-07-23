@@ -102,7 +102,7 @@ class EnvRewardArgs:
 
     # Adversarial crash parameters
 
-    adv_crash_base_penalty_A: float = -60.0 # Don't crash yourself!
+    adv_crash_base_penalty_A: float = -80.0 # Don't crash yourself!
     adv_crash_wideness_k: float = 60.0 # How wide the exp decay function is
     adv_crash_yoffset_B: float = 0.0 # How much the exp decay function is shifted up or down
 

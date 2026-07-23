@@ -272,7 +272,9 @@ class SandwichingRewardFunction(RewardFunction):
         """
         Calculates the individual sandwiching and proximity rewards for all adversaries.
         Returns an array of floats corresponding to each adversary's reward.
+        Crashed adversaries are completely excluded from swarm and sandwich calculations.
         """
+
         # Initialize an array of zeros for all adversaries
         indiv_rewards = np.zeros(len(adversaries), dtype=np.float32)
 
@@ -291,6 +293,9 @@ class SandwichingRewardFunction(RewardFunction):
         vehicles_in_ellipse = 0
 
         for i, adv in enumerate(adversaries):
+            if adv.crashed:
+                continue
+
             dx = adv.position[0] - ego.position[0]
             dy = adv.position[1] - ego.position[1]
 
@@ -313,12 +318,15 @@ class SandwichingRewardFunction(RewardFunction):
                 elif dy < 0: # Assuming negative dy is the left lane
                     left_blockers.append(i)
 
-        # 3. Exponential Swarm Bonus (Team Reward broadcasted to all individuals)
+        # 3. Exponential Swarm Bonus (Team Reward broadcasted to active individuals only)
         if vehicles_in_ellipse > 0:
             swarm_bonus = 0.05 * ((2 ** vehicles_in_ellipse) - 1)
-            indiv_rewards += swarm_bonus 
+            for i, adv in enumerate(adversaries):
+                if not adv.crashed:
+                    indiv_rewards[i] += swarm_bonus 
 
         # 4. Targeted Sandwich Bonuses (Individual Reward)
+        # Crashed agents are naturally excluded here because they were never added to the blocker lists
         is_long_sandwich = len(front_blockers) > 0 and len(back_blockers) > 0
         is_lat_sandwich = len(left_blockers) > 0 and len(right_blockers) > 0
 
