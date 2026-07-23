@@ -445,7 +445,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             adv_ego_thw = THWCalculator.compute_thw(adv, ego)
 
             adv_ego_reward_calculator.check_phase(ego.position[0])
-            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc, adv_ego_thw)
+            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc)
 
             # Consolidate rewards
 

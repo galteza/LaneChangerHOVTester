@@ -44,7 +44,7 @@ class EnvRewardArgs:
 
     # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
 
-    advadv_baseline_N: float = 2.0
+    advadv_baseline_N: float = 5.0
     advadv_peak_P: float = 2.0
     advadv_rise_slope_k1: float = 0.8
     advadv_decay_slope_k2: float = 0.3
@@ -67,7 +67,7 @@ class EnvRewardArgs:
 
     # THW-based reward shaping parameters (Adversary-to-Ego)
 
-    thw_base_reward_A: float = 5.7
+    thw_base_reward_A: float = 0.7
     thw_wideness_k: float = 1.0
     thw_yoffset_B: float = 0.0
 
@@ -195,7 +195,7 @@ class EnvArgs:
     def __post_init__(self):
         self.controlled_vehicles = self.observation.observation_config.vehicles_count - 1
         self.adv_crash_penalization = self.controlled_vehicles * [False]
-        self.step_since_crash_counter = self.controlled_vehicles * [0]
+        self.adv_step_since_crash_counter = self.controlled_vehicles * [0]
 
 
 # ===== RL CONFIGURATION CLASSES ====== #
