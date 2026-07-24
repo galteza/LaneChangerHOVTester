@@ -15,10 +15,12 @@ from src.env.reward_functions import (
     AdversarialCrashPenalty,
     DistanceToEgoRewardFunction,
     LaneKeepingRewardFunction,
+    RewardTHWAdvEgoFunction,
     RewardTTCAdvAdvFunction, 
     RewardTTCEgoAdvFunction, 
     SandwichingRewardFunction,
-    SimpleRewardFunction
+    SimpleRewardFunction,
+    SpeedMatchingRewardFunction
 )
 
 
@@ -396,14 +398,18 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
         # Splitting bullying into two phases: (1) blocking the ego from reaching the exit ramp, and (2) allowing the ego to reach the exit ramp successfully
 
         adv_adv_reward_calculator = RewardTTCAdvAdvFunction()
-        adv_ego_reward_calculator = RewardTTCEgoAdvFunction()
+        adv_ego_ttc_reward_calculator = RewardTTCEgoAdvFunction()
+        adv_ego_thw_reward_calculator = RewardTHWAdvEgoFunction()
+
         sandwiching_reward_calculator = SandwichingRewardFunction()
         simple_reward_calculator = SimpleRewardFunction()
         lane_keeping_reward_calculator = LaneKeepingRewardFunction()
         dist_to_ego_reward_calculator = DistanceToEgoRewardFunction()
         adv_crash_penalty_calculator = AdversarialCrashPenalty()
+        speed_matching_reward_calculator = SpeedMatchingRewardFunction()
 
-        adv_ego_reward_calculator.check_phase(ego.position[0])
+        adv_ego_ttc_reward_calculator.check_phase(ego.position[0])
+
 
         # ====== LOCAL REWARDS: Rewarding each adversary =======
 
@@ -411,61 +417,84 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
             adv_reward = 0.0
 
+            # RULE 1: Don't crash yourself!
+        
             if adv.crashed and self.config["adv_crash_penalization"][i]:
                 step_since_crash = self.config["adv_step_since_crash_counter"][i]
-                adv_reward += adv_crash_penalty_calculator.compute_reward(step_since_crash)
-                continue # Skip the rest of the reward calculations for this adversary if it has crashed
-
-            # Calculate distance to ego and apply distance-based reward
-            dist_to_ego = np.linalg.norm(adv.position - ego.position)
-            adv_reward += dist_to_ego_reward_calculator.compute_reward(dist_to_ego)
-
-            # Dont't make the ego go below the speed limit (20 m/s) by driving too close to it
-            if not adv_ego_reward_calculator.is_release_phase:
-                if ego.velocity[0] < 20.0 and dist_to_ego < 10.0:  # If ego is below speed limit and adv is too close
-                    adv_reward += simple_reward_calculator.get_reward("adv_ego_speed_penalty")
-
-            # Don't reverse on the highway!
-            if adv.velocity[0] < 0:
-                adv_reward += simple_reward_calculator.get_reward("adv_reverse_penalty")
+                adv_reward += adv_crash_penalty_calculator.compute_reward(step_since_crash) + simple_reward_calculator.get_reward("adv_crash_penalty")
             
-            # If adversary driving too close to boundary
+            # RULE 2: Keep off the lane boundaries!
 
             left_boundary, right_boundary = self._get_current_lateral_boundaries(adv)
             adv_reward += lane_keeping_reward_calculator.compute_reward(adv.position[1], left_boundary[1], right_boundary[1])
 
-            # Don't endanger other team mates!
+            # RULE 3: No reversing on the highway!
+             
+            if adv.velocity[0] < 0:
+                adv_reward += simple_reward_calculator.get_reward("adv_reverse_penalty")
+
+            # RULE 4: Take care of your team!
+
             for j, other_adv in enumerate(adversaries):
                 if i == j: continue
                 adv_adv_ttc = PolygonTTCCalculator.compute_ttc(adv, other_adv)
                 adv_reward += adv_adv_reward_calculator.compute_reward(adv_adv_ttc)
-            
-            # Bully the ego!
+
+            # RULE 5: Bully the ego!
+
+                # RULE 5a: You can't bully the ego from afar!
+                
+            dist_to_ego = np.linalg.norm(adv.position - ego.position)
+            dist_to_ego_reward_calculator.check_phase(ego.position[0])
+            adv_reward += dist_to_ego_reward_calculator.compute_reward(dist_to_ego)
+
+                # RULE 5b: Endanger (TTC + THW), but not to the point of no return!
+
             adv_ego_ttc = PolygonTTCCalculator.compute_ttc(adv, ego)
             adv_ego_thw = THWCalculator.compute_thw(adv, ego)
 
-            adv_ego_reward_calculator.check_phase(ego.position[0])
-            adv_reward += adv_ego_reward_calculator.compute_reward(adv_ego_ttc)
+            adv_ego_ttc_reward_calculator.check_phase(ego.position[0])
+            adv_reward += adv_ego_ttc_reward_calculator.compute_reward(adv_ego_ttc)
+            adv_reward += adv_ego_thw_reward_calculator.compute_reward(adv_ego_thw)
+
+                # RULE 5c: Don't make the ego stop driving!
+
+            if adv_ego_ttc_reward_calculator.phase == "RELEASE":
+                if ego.velocity[0] < 20.0 and dist_to_ego < 10.0:  # If ego is below speed limit and adv is too close
+                    adv_reward += simple_reward_calculator.get_reward("adv_ego_speed_penalty")
+
+                # RULE 5d: Try match speed with the ego!
+
+            adv_reward += speed_matching_reward_calculator.compute_reward(abs(adv.velocity[0] - ego.velocity[0]))
 
             # Consolidate rewards
 
             indiv_rewards[i] += adv_reward
 
-        # ====== PLATOON REWARDS: Rewarding team performance =======
+        # ====== PLATOON REWARDS: Rewarding final outcome/team behavior =======
         
-        # Try sandwiching the ego
+                # RULE 5e: Sandwich the ego!
 
         sandwiching_reward_calculator.check_phase(ego.position[0])
-
         indiv_rewards += sandwiching_reward_calculator.compute_reward(adversaries, ego) 
 
-        # Ego reached goal!!
+                # RULE 5f: Let the ego reach the exit ramp successfully!
+
         if ego.lane_index[0] == 'l' and ego.lane_index[1] == 'm' and not ego.crashed:
             indiv_rewards += np.array(simple_reward_calculator.get_reward("ego_reach_exit_reward"), dtype=np.float32)
 
-        # Ego has crashed!!
         if ego.crashed:
             indiv_rewards += np.array(simple_reward_calculator.get_reward("ego_crash_penalty"), dtype=np.float32)
+
+        # mean_reward = np.mean(indiv_rewards)
+        
+        # indiv_str = "        ".join(f"{val:07.3f}" for val in indiv_rewards)
+        
+        # print(
+        #     f"STEP {self.steps:>9}      "
+        #     f"MEAN     {mean_reward:07.3f}      "
+        #     f"INDIV     {indiv_str}"
+        # )
 
         return indiv_rewards
     
@@ -495,7 +524,6 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 else:
                     vehicle.color = None  # Reset to default color
                     self.ego.color = None  # Reset to default color
-            
 
         # Grab new observations, rewards, and termination/truncation flags
 
@@ -507,8 +535,15 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         truncated = False
 
-        if (self.ego.lane_index[0] == 'l' and self.ego.lane_index[1] == 'm' and not self.ego.crashed) or self.steps >= self.config['duration']:
+        if (self.ego.lane_index[0] == 'l' and self.ego.lane_index[1] == 'm' and not self.ego.crashed) or \
+            self.steps >= self.config['duration'] or \
+            self.config["adv_crash_penalization"] == [True] * self.config["controlled_vehicles"]:
+
             truncated = True
+
+        if terminated or truncated:
+            self.config["adv_crash_penalization"] = [False] * self.config["controlled_vehicles"]
+            self.config["adv_step_since_crash_counter"] = [0] * self.config["controlled_vehicles"]
 
         return obs, reward, terminated, truncated, {}
 

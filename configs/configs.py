@@ -53,7 +53,7 @@ class EnvRewardArgs:
     
     egoadv_blocking_baseline_N: float = 5.7
     egoadv_blocking_peak_P: float = 20
-    egoadv_blocking_rise_slope_k1: float = 7.0
+    egoadv_blocking_rise_slope_k1: float = 4.5
     egoadv_blocking_decay_slope_k2: float = 0.8
     egoadv_blocking_rise_shift_a: float = 1.4
     egoadv_blocking_decay_shift_b: float = 3.0
@@ -65,21 +65,36 @@ class EnvRewardArgs:
     egoadv_release_rise_shift_a: float = 3.6
     egoadv_release_decay_shift_b: float = 6.0
 
+    egoadv_entering_baseline_N: float = 0.0
+    egoadv_entering_peak_P: float = 0.0
+    egoadv_entering_rise_slope_k1: float = 1.0
+    egoadv_entering_decay_slope_k2: float = 1.0
+    egoadv_entering_rise_shift_a: float = 0.0
+    egoadv_entering_decay_shift_b: float = 0.0
+
     # THW-based reward shaping parameters (Adversary-to-Ego)
 
     thw_base_reward_A: float = 0.7
-    thw_wideness_k: float = 1.0
+    thw_wideness_k: float = 2.5
     thw_yoffset_B: float = 0.0
 
     # Distance to ego reward function
 
-    dist_base1_c1: float = 3.1
-    dist_base2_c2: float = -0.5
-    dist_base3_c3: float = -3.2
-    dist_down1_a: float = 10
-    dist_down2_b: float = 49.4
-    dist_slope1_k1: float = 0.7
-    dist_slope2_k2: float = 0.2
+    dist_blocking_base1_c1: float = 3.1
+    dist_blocking_base2_c2: float = -0.5
+    dist_blocking_base3_c3: float = -3.2
+    dist_blocking_down1_a: float = 10
+    dist_blocking_down2_b: float = 49.4
+    dist_blocking_slope1_k1: float = 0.7
+    dist_blocking_slope2_k2: float = 0.2
+
+    dist_entering_base1_c1: float = 0.0
+    dist_entering_base2_c2: float = 0.0
+    dist_entering_base3_c3: float = 0.0
+    dist_entering_down1_a: float = 0.0
+    dist_entering_down2_b: float = 0.0
+    dist_entering_slope1_k1: float = 0.0
+    dist_entering_slope2_k2: float = 0.0
 
 
     # Sandwiching and occupancy corridor parameters
@@ -97,8 +112,8 @@ class EnvRewardArgs:
 
     # Lane keeping reward parameters
 
-    max_lane_penalty: float = 0.4
-    boundary_hit_penalty: float = -0.3
+    max_lane_penalty: float = 0.4 # Affects amplitude of the penalty
+    boundary_hit_penalty: float = -0.35 # Negative reward
 
     # Adversarial crash parameters
 
@@ -159,7 +174,7 @@ class EnvArgs:
 
     env_id: str = "merge_exit_highway"
     render_mode: Optional[str] = None
-    lanes_count: int = 2
+    lanes_count: int = 3
     lane_width_m: int = 4
     # Establishing lengths of each physical section
     ends_m: List[int] = field(default_factory=lambda: [150, 80, 80, 300, 80, 80, 150])

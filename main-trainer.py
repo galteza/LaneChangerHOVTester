@@ -101,9 +101,14 @@ if __name__ == "__main__":
             average_reward = reward_cumulative / step_counter
 
             if done or truncated:
-                print(f"==== EP FINISHED AFTER {step_counter} STEPS /// AVERAGE REWARD: {average_reward} ====")
+                print(f"==================================================================================================================================================\n"
+                      f"       EP FINISHED AFTER  {step_counter:>4}  STEPS       |      AVERAGE REWARD:    {average_reward}     \n"
+                      f"==================================================================================================================================================")
+                for idx in range(RLargs.num_agents):
+                    writer.add_scalar(f"ave_reward_per_ep/adv_{idx}", average_reward[idx], global_step)
                 reward_cumulative = np.zeros(RLargs.num_agents)
                 step_counter = 0
+
             
             # STORAGE IN BUFFER: Store all these in the buffer for later training
             
@@ -122,9 +127,8 @@ if __name__ == "__main__":
                     writer.add_scalar("losses/qf_loss", qf_loss_val, global_step)
                     writer.add_scalar("losses/actor_loss", actor_loss_val, global_step)
                     writer.add_scalar("losses/alpha", agent.alpha, global_step)
-                    for idx in range(RLargs.num_agents):
-                        writer.add_scalar(f"rewards/average reward_{idx}", average_reward[idx], global_step)
-                    print(f"Step: {global_step} | SPS: {int(global_step / (time.time() - start_time))} | Reward: {np.mean(reward)} {reward} ")
+                    
+                    print(f"STEP: {global_step:>9}    |    SPS: {int(global_step / (time.time() - start_time)):>5}    |    Time Left: {int((RLargs.total_timesteps - global_step) / (global_step / (time.time() - start_time)))/3600:>7.1f}    |    QF Loss: {qf_loss_val:>7.4f}    |    Actor Loss: {actor_loss_val:>7.4f}    |    Alpha: {agent.alpha:>7.4f}")
 
                     writer.flush() # Ensure that all pending events have been written to disk
 

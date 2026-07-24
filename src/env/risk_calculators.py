@@ -136,9 +136,9 @@ class THWCalculator:
             return np.inf
         
         distance = np.linalg.norm(relative_position)
-        speed_i = getattr(rear_vehicle, 'speed', 0.0)
+        speed_i = getattr(rear_vehicle, 'speed', 1e-5)
         
         if speed_i <= 1e-5:
-            return np.inf  # Avoid division by zero
+            speed_i = 1e-5  # Avoid division by zero; treat as very small speed
         
         return distance / speed_i

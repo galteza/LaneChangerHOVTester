@@ -16,7 +16,7 @@ class RewardFunction:
         self.release_distance = self.args.env.reward.release_distance
         self.dist_to_exit = sum(self.args.env.ends_m[:4])
 
-        self.is_release_phase = False  # Default to blocking phase
+        self.phase = "ENTERING"  # Default to blocking phase
 
     def check_phase(self, longitudinal_pos: float):
         """
@@ -25,10 +25,14 @@ class RewardFunction:
 
         self.dist_to_exit = sum(self.args.env.ends_m[:4]) - longitudinal_pos  # Update distance to exit based on current position
 
-        if self.dist_to_exit > self.release_distance:  # Assuming the release phase starts after the release distance
-            self.is_release_phase = False
+        if longitudinal_pos < sum(self.args.env.ends_m[:2]):
+            self.phase = "ENTERING"
+        elif self.dist_to_exit > self.release_distance:  # Assuming the release phase starts after the release distance
+            self.phase = "BLOCKING"
         else:
-            self.is_release_phase = True
+            self.phase = "RELEASE"
+
+        return self.phase
 
 
 # ===== TTC REWARD FUNCTIONS ====== #
@@ -71,12 +75,6 @@ class RewardTTCAdvAdvFunction(RewardTTCFunction):
     def __init__(self):
         super().__init__()
 
-        # self.adv_adv_ttc_close_penalty = self.args.env.reward.adv_adv_ttc_close_penalty
-        # self.adv_adv_ttc_near_m = self.args.env.reward.adv_adv_ttc_near_m
-        # self.adv_adv_ttc_near_b = self.args.env.reward.adv_adv_ttc_near_b
-        # self.adv_adv_ttc_far_m = self.args.env.reward.adv_adv_ttc_far_m
-        # self.adv_adv_ttc_far_b = self.args.env.reward.adv_adv_ttc_far_b
-
         self.baseline_N = self.args.env.reward.advadv_baseline_N
         self.peak_P = self.args.env.reward.advadv_peak_P
         self.rise_slope_k1 = self.args.env.reward.advadv_rise_slope_k1
@@ -91,15 +89,6 @@ class RewardTTCAdvAdvFunction(RewardTTCFunction):
             (self.peak_P + self.baseline_N) / (1 + np.exp(-self.rise_slope_k1 * (ttc - self.rise_shift_a))) - \
             (self.peak_P) / (1 + np.exp(-self.decay_slope_k2 * (ttc - self.decay_shift_b)))
 
-
-        # if 0.0 <= ttc < 1.0: # REALLY high risk of fratricide
-        #     self.adv_reward = self.adv_adv_ttc_close_penalty # [-50]
-        # elif 1.0 <= ttc <= 4.0: # Need to back off!
-        #     self.adv_reward = self.adv_adv_ttc_near_m * (1/ttc) ** 1/2 + self.adv_adv_ttc_near_b # [-50, -20]
-        # elif ttc > 4.0: # Okay, but don't stray too far!
-        #     self.adv_reward = self.adv_adv_ttc_far_m * (1/ttc) + self.adv_adv_ttc_far_b # [-20, -60]
-
-
         return self.adv_reward
     
 class RewardTTCEgoAdvFunction(RewardTTCFunction):
@@ -110,58 +99,63 @@ class RewardTTCEgoAdvFunction(RewardTTCFunction):
     def __init__(self):
         super().__init__()
 
-        if not self.is_release_phase:
+        if self.phase == "BLOCKING":
             self.baseline_N = self.args.env.reward.egoadv_blocking_baseline_N
             self.peak_P = self.args.env.reward.egoadv_blocking_peak_P
             self.rise_slope_k1 = self.args.env.reward.egoadv_blocking_rise_slope_k1
             self.decay_slope_k2 = self.args.env.reward.egoadv_blocking_decay_slope_k2
             self.rise_shift_a = self.args.env.reward.egoadv_blocking_rise_shift_a
             self.decay_shift_b = self.args.env.reward.egoadv_blocking_decay_shift_b
-        elif self.is_release_phase:
+        elif self.phase == "RELEASE":
             self.baseline_N = self.args.env.reward.egoadv_release_baseline_N
             self.peak_P = self.args.env.reward.egoadv_release_peak_P
             self.rise_slope_k1 = self.args.env.reward.egoadv_release_rise_slope_k1
             self.decay_slope_k2 = self.args.env.reward.egoadv_release_decay_slope_k2
             self.rise_shift_a = self.args.env.reward.egoadv_release_rise_shift_a
             self.decay_shift_b = self.args.env.reward.egoadv_release_decay_shift_b
-
-
-        # self.adv_ego_ttc_close_penalty = self.args.env.reward.adv_ego_ttc_close_penalty
-        # self.adv_ego_ttc_near_a = self.args.env.reward.adv_ego_ttc_near_a
-        # self.adv_ego_ttc_near_h = self.args.env.reward.adv_ego_ttc_near_h
-        # self.adv_ego_ttc_near_k = self.args.env.reward.adv_ego_ttc_near_k
-        # self.adv_ego_ttc_far_m = self.args.env.reward.adv_ego_ttc_far_m
-        # self.adv_ego_ttc_far_b = self.args.env.reward.adv_ego_ttc_far_b
-
-        # self.adv_release_phase_m = self.args.env.reward.adv_release_phase_m
-        # self.adv_release_phase_b = self.args.env.reward.adv_release_phase_b
+        elif self.phase == "ENTERING":
+            self.baseline_N = self.args.env.reward.egoadv_entering_baseline_N
+            self.peak_P = self.args.env.reward.egoadv_entering_peak_P
+            self.rise_slope_k1 = self.args.env.reward.egoadv_entering_rise_slope_k1
+            self.decay_slope_k2 = self.args.env.reward.egoadv_entering_decay_slope_k2
+            self.rise_shift_a = self.args.env.reward.egoadv_entering_rise_shift_a
+            self.decay_shift_b = self.args.env.reward.egoadv_entering_decay_shift_b
 
     def compute_reward(self, ttc) -> float:
-
         
         self.adv_reward = -self.baseline_N + \
             (self.peak_P + self.baseline_N) / (1 + np.exp(-self.rise_slope_k1 * (ttc - self.rise_shift_a))) - \
             (self.peak_P) / (1 + np.exp(-self.decay_slope_k2 * (ttc - self.decay_shift_b)))
-
-
-
-        # if not self.is_release_phase: # Still trying to block on the highway
-        #     if 0.0 <= ttc < 1.0: # Okay uhh, too much
-        #         self.adv_reward = self.adv_ego_ttc_close_penalty # [-60]
-        #     elif 1.0 <= ttc <= 4.0: # Cool, try to keep it like this
-        #         self.adv_reward = self.adv_ego_ttc_near_a * (ttc - self.adv_ego_ttc_near_h)**2 + self.adv_ego_ttc_near_k # [-50, 20, -10]
-        #     elif ttc > 4.0: # Too safe, get closer to ego!
-        #         self.adv_reward = self.adv_ego_ttc_far_m * (1/ttc) + self.adv_ego_ttc_far_b  # [-10, -60]
-        # else: # Release phase, let ego go!
-        #     if 0.0 <= ttc <= 4.0: # OkaaaYYY you really gotta back off now 
-        #         self.adv_reward = self.adv_release_phase_m * ttc + self.adv_release_phase_b # [-70, -20]
         
         return self.adv_reward
     
     def set_phase(self, phase: str):
-        if phase not in ["BLOCKING", "RELEASE"]:
-            raise ValueError("Phase must be either 'BLOCKING' or 'RELEASE'.")
+
+        if phase not in ["BLOCKING", "RELEASE", "ENTERING"]:
+            raise ValueError("Phase must be either 'BLOCKING', 'RELEASE', or 'ENTERING'.")
         self.phase = phase
+
+        if self.phase == "BLOCKING":
+            self.baseline_N = self.args.env.reward.egoadv_blocking_baseline_N
+            self.peak_P = self.args.env.reward.egoadv_blocking_peak_P
+            self.rise_slope_k1 = self.args.env.reward.egoadv_blocking_rise_slope_k1
+            self.decay_slope_k2 = self.args.env.reward.egoadv_blocking_decay_slope_k2
+            self.rise_shift_a = self.args.env.reward.egoadv_blocking_rise_shift_a
+            self.decay_shift_b = self.args.env.reward.egoadv_blocking_decay_shift_b
+        elif self.phase == "RELEASE":
+            self.baseline_N = self.args.env.reward.egoadv_release_baseline_N
+            self.peak_P = self.args.env.reward.egoadv_release_peak_P
+            self.rise_slope_k1 = self.args.env.reward.egoadv_release_rise_slope_k1
+            self.decay_slope_k2 = self.args.env.reward.egoadv_release_decay_slope_k2
+            self.rise_shift_a = self.args.env.reward.egoadv_release_rise_shift_a
+            self.decay_shift_b = self.args.env.reward.egoadv_release_decay_shift_b
+        elif self.phase == "ENTERING":
+            self.baseline_N = self.args.env.reward.egoadv_entering_baseline_N
+            self.peak_P = self.args.env.reward.egoadv_entering_peak_P
+            self.rise_slope_k1 = self.args.env.reward.egoadv_entering_rise_slope_k1
+            self.decay_slope_k2 = self.args.env.reward.egoadv_entering_decay_slope_k2
+            self.rise_shift_a = self.args.env.reward.egoadv_entering_rise_shift_a
+            self.decay_shift_b = self.args.env.reward.egoadv_entering_decay_shift_b
 
 class RewardTHWAdvEgoFunction(RewardFunction):
     """
@@ -209,18 +203,28 @@ class DistanceToEgoRewardFunction(RewardFunction):
         super().__init__()
         self.adv_reward = 0.0
 
-        self.base1_c1 = self.args.env.reward.dist_base1_c1
-        self.base2_c2 = self.args.env.reward.dist_base2_c2
-        self.base3_c3 = self.args.env.reward.dist_base3_c3
-        self.down1_a = self.args.env.reward.dist_down1_a
-        self.down2_b = self.args.env.reward.dist_down2_b
-        self.slope1_k1 = self.args.env.reward.dist_slope1_k1
-        self.slope2_k2 = self.args.env.reward.dist_slope2_k2
+        if self.phase == "ENTERING":
+            self.base1_c1 = self.args.env.reward.dist_entering_base1_c1
+            self.base2_c2 = self.args.env.reward.dist_entering_base2_c2
+            self.base3_c3 = self.args.env.reward.dist_entering_base3_c3
+            self.down1_a = self.args.env.reward.dist_entering_down1_a
+            self.down2_b = self.args.env.reward.dist_entering_down2_b
+            self.slope1_k1 = self.args.env.reward.dist_entering_slope1_k1
+            self.slope2_k2 = self.args.env.reward.dist_entering_slope2_k2
+
+        elif self.phase == "BLOCKING" or self.phase == "RELEASE":
+            self.base1_c1 = self.args.env.reward.dist_blocking_base1_c1
+            self.base2_c2 = self.args.env.reward.dist_blocking_base2_c2
+            self.base3_c3 = self.args.env.reward.dist_blocking_base3_c3
+            self.down1_a = self.args.env.reward.dist_blocking_down1_a
+            self.down2_b = self.args.env.reward.dist_blocking_down2_b
+            self.slope1_k1 = self.args.env.reward.dist_blocking_slope1_k1
+            self.slope2_k2 = self.args.env.reward.dist_blocking_slope2_k2
 
     def compute_reward(self, distance_to_ego: float) -> float:
 
         if distance_to_ego < 0:
-            raise ValueError("Distance to ego must be non-negative.")
+            distance_to_ego = abs(distance_to_ego)  # Ensure distance is non-negative
 
         self.adv_reward = self.base3_c3 + \
             (self.base1_c1 - self.base2_c2) / (1 + np.exp(self.slope1_k1 * (distance_to_ego - self.down1_a))) + \
@@ -236,6 +240,32 @@ class DistanceToEgoRewardFunction(RewardFunction):
         rewards = [self.compute_reward(d) for d in distances]
         
         return distances, rewards
+
+    def set_phase(self, phase: str):
+        """
+        Sets the current phase of the reward function. This can be used to adjust parameters based on the phase.
+        """
+        if phase not in ["BLOCKING", "RELEASE", "ENTERING"]:
+            raise ValueError("Phase must be either 'BLOCKING', 'RELEASE', or 'ENTERING'.")
+        self.phase = phase
+
+        if self.phase == "ENTERING":
+            self.base1_c1 = self.args.env.reward.dist_entering_base1_c1
+            self.base2_c2 = self.args.env.reward.dist_entering_base2_c2
+            self.base3_c3 = self.args.env.reward.dist_entering_base3_c3
+            self.down1_a = self.args.env.reward.dist_entering_down1_a
+            self.down2_b = self.args.env.reward.dist_entering_down2_b
+            self.slope1_k1 = self.args.env.reward.dist_entering_slope1_k1
+            self.slope2_k2 = self.args.env.reward.dist_entering_slope2_k2
+
+        elif self.phase == "BLOCKING" or self.phase == "RELEASE":
+            self.base1_c1 = self.args.env.reward.dist_blocking_base1_c1
+            self.base2_c2 = self.args.env.reward.dist_blocking_base2_c2
+            self.base3_c3 = self.args.env.reward.dist_blocking_base3_c3
+            self.down1_a = self.args.env.reward.dist_blocking_down1_a
+            self.down2_b = self.args.env.reward.dist_blocking_down2_b
+            self.slope1_k1 = self.args.env.reward.dist_blocking_slope1_k1
+            self.slope2_k2 = self.args.env.reward.dist_blocking_slope2_k2
 
 
 # ====== SANDWICHING REWARD FUNCTION ====== #
@@ -278,7 +308,7 @@ class SandwichingRewardFunction(RewardFunction):
         # Initialize an array of zeros for all adversaries
         indiv_rewards = np.zeros(len(adversaries), dtype=np.float32)
 
-        if self.is_release_phase:
+        if self.phase == "RELEASE":
             return indiv_rewards # No sandwiching rewards during the release phase
 
         # Calculate dynamic longitudinal radius based on CURRENT ego speed
@@ -396,16 +426,19 @@ class LaneKeepingRewardFunction(RewardFunction):
     def compute_reward(self, vehicle_y: float, left_boundary_y: float, right_boundary_y: float) -> float:
         reward = 0.0
         
-        # 1. The Global Continuous Wave (Dense Penalty)
-        # Perfectly handles 0, 4, 8 as peaks and 2, 6, 10 as troughs naturally
-        amplitude = self.max_lane_penalty / 2.0
-        cosine_penalty = amplitude * np.cos((2 * np.pi / self.lane_width_m) * vehicle_y) - amplitude
-        
-        reward += cosine_penalty
+        # Continuous wave penalty for being at lane straddling positions
 
-        # 2. The Sparse Physical Boundary Hit (from your snippet)
-        # This acts as the physical "rumble strip" / guardrail penalty
-        if left_boundary_y + (self.vehicle_width / 2) > vehicle_y or \
+        if vehicle_y > left_boundary_y + (self.vehicle_width / 2) and \
+            vehicle_y < right_boundary_y - (self.vehicle_width / 2):
+
+            amplitude = self.max_lane_penalty / 2.0
+            cosine_penalty = amplitude * np.cos((2 * np.pi / self.lane_width_m) * vehicle_y) - amplitude
+            
+            reward += cosine_penalty
+
+        # Boundary and outside lane penalty
+
+        elif left_boundary_y + (self.vehicle_width / 2) > vehicle_y or \
            right_boundary_y - (self.vehicle_width / 2) < vehicle_y:
             
             reward += self.boundary_hit_penalty
@@ -514,13 +547,15 @@ class FunctionVisualizer:
 
         if self.reward_ttc_adv_adv_function:
             ttc_vals, rewards = self.reward_ttc_adv_adv_function.take_data_points()
-            plt.plot(ttc_vals, rewards, label='Adv-Adv Reward vs TTC', color='orange', linewidth=2)
+            plt.plot(ttc_vals, rewards, label=f'Adv-Adv Reward vs TTC', color='blue', linewidth=2)
             has_plots = True
             
         if self.reward_ttc_ego_adv_function:
-            ttc_vals, rewards = self.reward_ttc_ego_adv_function.take_data_points()
-            plt.plot(ttc_vals, rewards, label='Ego-Adv Reward vs TTC', color='blue', linewidth=2)
-            has_plots = True
+            for i, (phase, color) in enumerate(zip(["BLOCKING", "RELEASE", "ENTERING"], ["green", "orange", "red"])):
+                self.reward_ttc_ego_adv_function.set_phase(phase)
+                ttc_vals, rewards = self.reward_ttc_ego_adv_function.take_data_points()
+                plt.plot(ttc_vals, rewards, label=f'Ego-Adv Reward vs TTC [{phase}]', color=color, linewidth=2)
+                has_plots = True
 
         if not has_plots:
             print("No TTC reward functions provided to visualize.")
@@ -644,11 +679,11 @@ class FunctionVisualizer:
         if not self.distance_to_ego_reward_function:
             print("No DistanceToEgoRewardFunction provided to visualize.")
             return
-            
-        distances, rewards = self.distance_to_ego_reward_function.take_data_points()
-        
-        plt.figure(figsize=(10, 6))
-        plt.plot(distances, rewards, label='Distance to Ego Penalty', color='blue', linewidth=2)
+
+        for phase, color in zip(["BLOCKING", "RELEASE", "ENTERING"], ['green', 'orange', 'red']):
+            self.distance_to_ego_reward_function.set_phase(phase)
+            distances, rewards = self.distance_to_ego_reward_function.take_data_points()
+            plt.plot(distances, rewards, label=f'Distance to Ego Penalty [{phase}]', color=color, linewidth=2)
         
         plt.title('Distance to Ego Penalty (Double Sigmoid)')
         plt.xlabel('Distance to Ego (meters)')
