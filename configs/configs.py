@@ -107,7 +107,7 @@ class EnvRewardArgs:
     ellipse_b: float = 3.5            # Lateral radius (slightly less than a lane width)
     speed_k: float = 0.5              # How much the ellipse stretches with ego speed
 
-    base_proximity_reward: float = 0.50
+    base_proximity_reward: float = 0.30
     sandwich_bonus: float = 1.0
 
     # Lane keeping reward parameters
@@ -132,7 +132,7 @@ class EnvRewardArgs:
     ego_crash_penalty: float = -11.0 # Don't make ego crash!
     ego_reach_exit_reward: float = 6.0 # Let ego reach exit!
     adv_reverse_penalty: float = -1.0 # Don't reverse!
-    adv_ego_speed_penalty: float = -0.7 # Don't make ego go below speed lim
+    adv_ego_speed_penalty: float = -0.9 # Don't make ego go below speed lim
 
 
     """
@@ -174,7 +174,7 @@ class EnvArgs:
 
     env_id: str = "merge_exit_highway"
     render_mode: Optional[str] = None
-    lanes_count: int = 3
+    lanes_count: int = 2
     lane_width_m: int = 4
     # Establishing lengths of each physical section
     ends_m: List[int] = field(default_factory=lambda: [150, 80, 80, 300, 80, 80, 150])

@@ -465,7 +465,8 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
                 # RULE 5d: Try match speed with the ego!
 
-            adv_reward += speed_matching_reward_calculator.compute_reward(abs(adv.velocity[0] - ego.velocity[0]))
+            if abs(ego.position[0] - adv.position[0]) < 20.0:  # Only consider speed matching when close to ego
+                adv_reward += speed_matching_reward_calculator.compute_reward(abs(adv.velocity[0] - ego.velocity[0]))
 
             # Consolidate rewards
 
