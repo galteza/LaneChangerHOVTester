@@ -44,22 +44,22 @@ class EnvRewardArgs:
 
     # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
 
-    advadv_baseline_N: float = 5.0
-    advadv_peak_P: float = 2.0
+    advadv_baseline_N: float = 0.57
+    advadv_peak_P: float = 0.2
     advadv_rise_slope_k1: float = 0.8
     advadv_decay_slope_k2: float = 0.3
     advadv_rise_shift_a: float = 3.4
     advadv_decay_shift_b: float = 9.5
     
-    egoadv_blocking_baseline_N: float = 5.7
-    egoadv_blocking_peak_P: float = 20
+    egoadv_blocking_baseline_N: float = 0.57
+    egoadv_blocking_peak_P: float = 1.0
     egoadv_blocking_rise_slope_k1: float = 4.5
     egoadv_blocking_decay_slope_k2: float = 0.8
     egoadv_blocking_rise_shift_a: float = 1.4
     egoadv_blocking_decay_shift_b: float = 3.0
 
-    egoadv_release_baseline_N: float = 5.7
-    egoadv_release_peak_P: float = 2.0
+    egoadv_release_baseline_N: float = 0.57
+    egoadv_release_peak_P: float = 0.2
     egoadv_release_rise_slope_k1: float = 2.4
     egoadv_release_decay_slope_k2: float = 1.3
     egoadv_release_rise_shift_a: float = 3.6
@@ -80,9 +80,9 @@ class EnvRewardArgs:
 
     # Distance to ego reward function
 
-    dist_blocking_base1_c1: float = 3.1
-    dist_blocking_base2_c2: float = -0.5
-    dist_blocking_base3_c3: float = -3.2
+    dist_blocking_base1_c1: float = 0.5
+    dist_blocking_base2_c2: float = -0.1
+    dist_blocking_base3_c3: float = -0.5
     dist_blocking_down1_a: float = 10
     dist_blocking_down2_b: float = 49.4
     dist_blocking_slope1_k1: float = 0.7
@@ -117,7 +117,7 @@ class EnvRewardArgs:
 
     # Adversarial crash parameters
 
-    adv_crash_base_penalty_A: float = -80.0 # Don't crash yourself!
+    adv_crash_base_penalty_A: float = -8.0 # Don't crash yourself!
     adv_crash_wideness_k: float = 60.0 # How wide the exp decay function is
     adv_crash_yoffset_B: float = 0.0 # How much the exp decay function is shifted up or down
 
@@ -125,14 +125,14 @@ class EnvRewardArgs:
 
     adv_speed_matching_base_reward_A: float = 0.5
     adv_speed_matching_wideness_k: float = 16 # How wide the exp decay function is
-    adv_speed_matching_yoffset_B: float = -0.5 # How much the exp decay function is shifted up or down
+    adv_speed_matching_yoffset_B: float = -0.1 # How much the exp decay function is shifted up or down
 
     # Simple addition reward parameters
 
-    ego_crash_penalty: float = -110.0 # Don't make ego crash!
-    ego_reach_exit_reward: float = 80.0 # Let ego reach exit!
-    adv_reverse_penalty: float = -10.0 # Don't reverse!
-    adv_ego_speed_penalty: float = -10.0 # Don't make ego go below speed lim
+    ego_crash_penalty: float = -11.0 # Don't make ego crash!
+    ego_reach_exit_reward: float = 6.0 # Let ego reach exit!
+    adv_reverse_penalty: float = -1.0 # Don't reverse!
+    adv_ego_speed_penalty: float = -0.7 # Don't make ego go below speed lim
 
 
     """
