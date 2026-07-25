@@ -410,6 +410,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
 
         adv_ego_ttc_reward_calculator.check_phase(ego.position[0])
 
+        adv_ttc_rewards = []
 
         # ====== LOCAL REWARDS: Rewarding each adversary =======
 
@@ -454,13 +455,19 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
             adv_ego_thw = THWCalculator.compute_thw(adv, ego)
 
             adv_ego_ttc_reward_calculator.check_phase(ego.position[0])
-            adv_reward += adv_ego_ttc_reward_calculator.compute_reward(adv_ego_ttc)
+            adv_ttc_reward = adv_ego_ttc_reward_calculator.compute_reward(adv_ego_ttc)
+            adv_reward += adv_ttc_reward
+            adv_ttc_rewards.append(adv_ttc_reward)
             adv_reward += adv_ego_thw_reward_calculator.compute_reward(adv_ego_thw)
 
-                # RULE 5c: Don't make the ego stop driving!
+                # RULE 5c: Don't make the ego stop driving, and don't be the cause!
 
-            if adv_ego_ttc_reward_calculator.phase == "RELEASE":
-                if ego.velocity[0] < 20.0 and dist_to_ego < 10.0:  # If ego is below speed limit and adv is too close
+            dx = adv.position[0] - ego.position[0]
+            dy = adv.position[1] - ego.position[1]
+            lane_width = self.args.env.lane_width_m
+
+            if adv_ego_ttc_reward_calculator.phase != "ENTERING":
+                if adv.velocity[0] < 20.0 and dx > 0 and abs(dy) < (lane_width / 2):
                     adv_reward += simple_reward_calculator.get_reward("adv_ego_speed_penalty")
 
                 # RULE 5d: Try match speed with the ego!
@@ -477,7 +484,7 @@ class MergeExitLaneHighway_Environment(AbstractEnv):
                 # RULE 5e: Sandwich the ego!
 
         sandwiching_reward_calculator.check_phase(ego.position[0])
-        indiv_rewards += sandwiching_reward_calculator.compute_reward(adversaries, ego) 
+        indiv_rewards += sandwiching_reward_calculator.compute_reward(adversaries, ego, adv_ttc_rewards)
 
                 # RULE 5f: Let the ego reach the exit ramp successfully!
 

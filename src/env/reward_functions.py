@@ -298,7 +298,7 @@ class SandwichingRewardFunction(RewardFunction):
         self.base_proximity_reward = self.args.env.reward.base_proximity_reward
         self.sandwich_bonus = self.args.env.reward.sandwich_bonus
 
-    def compute_reward(self, adversaries, ego) -> np.ndarray:
+    def compute_reward(self, adversaries, ego, adv_ttc_rewards) -> np.ndarray:
         """
         Calculates the individual sandwiching and proximity rewards for all adversaries.
         Returns an array of floats corresponding to each adversary's reward.
@@ -368,6 +368,9 @@ class SandwichingRewardFunction(RewardFunction):
         if is_lat_sandwich:
             for idx in left_blockers + right_blockers:
                 indiv_rewards[idx] += self.sandwich_bonus
+
+        for i in range(len(indiv_rewards)):
+            indiv_rewards[i] = adv_ttc_rewards[i] * indiv_rewards[i]
 
         return indiv_rewards
 

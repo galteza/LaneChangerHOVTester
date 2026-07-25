@@ -4,6 +4,8 @@ import time
 import numpy as np
 import random
 import os
+import re
+from pathlib import Path
 
 # Imports for RL
 
@@ -25,6 +27,13 @@ from configs.configs import RLArgs
 from gymnasium.wrappers import RecordVideo
     
 if __name__ == "__main__":
+
+    # --- Fine-Tuning / Resuming Configuration ---
+    # Set to True to load weights from a previous run before training
+    RESUME_TRAINING = True 
+    # Set to your specific folder path, or None to skip straight to the newest run fallback.
+    SPECIFIC_RUN_DIR = "runs/merge_exit_highway__configs__1__20260725-121841"
+    # --------------------------------------------
 
     RLargs = tyro.cli(RLArgs) # Load up the RL arguments from the configs
 
@@ -68,6 +77,56 @@ if __name__ == "__main__":
     unwrapped_viewing_env.observation_type.observer_vehicle = unwrapped_viewing_env.ego 
 
     agent = MASACRL(RLargs) # The learning agent
+
+    # --- Load Previous Weights for Fine-Tuning ---
+    if RESUME_TRAINING:
+        print("\n--- Initializing Fine-Tuning ---")
+        run_dir = None
+
+        if SPECIFIC_RUN_DIR:
+            candidate_dir = Path(SPECIFIC_RUN_DIR)
+            if candidate_dir.exists() and candidate_dir.is_dir():
+                run_dir = candidate_dir
+            else:
+                print(f"Warning: Specific folder '{candidate_dir}' not found. Falling back to newest run.")
+
+        if run_dir is None:
+            runs_root = Path(__file__).resolve().parent / "runs"
+            
+            if not runs_root.exists():
+                raise FileNotFoundError(f"Runs root directory not found: {runs_root}")
+                
+            run_dirs = [path for path in runs_root.iterdir() if path.is_dir()]
+            if not run_dirs:
+                raise FileNotFoundError(f"No run directories found in {runs_root}")
+
+            run_dir = max(run_dirs, key=lambda path: path.stat().st_mtime)
+
+        print(f"Target run directory identified: {run_dir}")
+
+        # Determine if we are loading final or interrupted weights
+        if (run_dir / "actor_final.pth").exists():
+            suffix = "final.pth"
+        elif (run_dir / "actor_interrupted.pth").exists():
+            suffix = "interrupted.pth"
+        else:
+            raise FileNotFoundError(f"Could not find actor_final.pth or actor_interrupted.pth in {run_dir}")
+
+        actor_path = run_dir / f"actor_{suffix}"
+        qf1_path = run_dir / f"criticqf1_{suffix}"
+        qf2_path = run_dir / f"criticqf2_{suffix}"
+
+        # Load weights into the initialized agent
+        print(f"Loading Actor weights: {actor_path.name}")
+        agent.actor.load_state_dict(torch.load(actor_path, map_location=device))
+        
+        print(f"Loading Critic 1 weights: {qf1_path.name}")
+        agent.qf1.load_state_dict(torch.load(qf1_path, map_location=device))
+        
+        print(f"Loading Critic 2 weights: {qf2_path.name}")
+        agent.qf2.load_state_dict(torch.load(qf2_path, map_location=device))
+        print("Previous weights successfully loaded! Continuing to new training loop...\n")
+    # ---------------------------------------------
 
     rb = MultiAgentReplayBuffer(RLargs) # The replay buffer for storing transitions
 
