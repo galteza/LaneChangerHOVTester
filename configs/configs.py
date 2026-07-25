@@ -42,47 +42,37 @@ class EnvRewardArgs:
 
     release_distance: float = 20.0
 
-    # TTC-based reward shaping parameters (Adversary-to-Adversary and Ego-to-Adversary)
+    # RULE 1: Don't crash yourself!
+    
+    adv_crash_base_penalty_A: float = -8.0 # Don't crash yourself!
+    adv_crash_wideness_k: float = 60.0 # How wide the exp decay function is
+    adv_crash_yoffset_B: float = 0.0 # How much the exp decay function is shifted up or down
 
-    advadv_baseline_N: float = 0.57
+    # RULE 2: Stay off the lane boundaries!
+
+    max_lane_penalty: float = 0.24 # Affects amplitude of the penalty
+    boundary_hit_penalty: float = -0.35 # Negative reward
+
+    # RULE 3: No reversing on the highway!
+
+    adv_reverse_penalty: float = -1.0 # Don't reverse!
+
+    # RULE 4: Take care of your team!
+
+    advadv_baseline_N: float = 0.4
     advadv_peak_P: float = 0.2
     advadv_rise_slope_k1: float = 0.8
     advadv_decay_slope_k2: float = 0.3
     advadv_rise_shift_a: float = 3.4
     advadv_decay_shift_b: float = 9.5
+
+    # RULE 5: Bully the ego!
+
+        # RULE 5a: You can't bully the ego from afar!
     
-    egoadv_blocking_baseline_N: float = 0.57
-    egoadv_blocking_peak_P: float = 1.0
-    egoadv_blocking_rise_slope_k1: float = 4.5
-    egoadv_blocking_decay_slope_k2: float = 0.8
-    egoadv_blocking_rise_shift_a: float = 1.4
-    egoadv_blocking_decay_shift_b: float = 3.0
-
-    egoadv_release_baseline_N: float = 0.57
-    egoadv_release_peak_P: float = 0.2
-    egoadv_release_rise_slope_k1: float = 2.4
-    egoadv_release_decay_slope_k2: float = 1.3
-    egoadv_release_rise_shift_a: float = 3.6
-    egoadv_release_decay_shift_b: float = 6.0
-
-    egoadv_entering_baseline_N: float = 0.0
-    egoadv_entering_peak_P: float = 0.0
-    egoadv_entering_rise_slope_k1: float = 1.0
-    egoadv_entering_decay_slope_k2: float = 1.0
-    egoadv_entering_rise_shift_a: float = 0.0
-    egoadv_entering_decay_shift_b: float = 0.0
-
-    # THW-based reward shaping parameters (Adversary-to-Ego)
-
-    thw_base_reward_A: float = 0.7
-    thw_wideness_k: float = 2.5
-    thw_yoffset_B: float = 0.0
-
-    # Distance to ego reward function
-
-    dist_blocking_base1_c1: float = 0.5
-    dist_blocking_base2_c2: float = -0.1
-    dist_blocking_base3_c3: float = -0.5
+    dist_blocking_base1_c1: float = 0.37 # First mag
+    dist_blocking_base2_c2: float = -0.1 # Second mag
+    dist_blocking_base3_c3: float = -0.5 # Third mag
     dist_blocking_down1_a: float = 10
     dist_blocking_down2_b: float = 49.4
     dist_blocking_slope1_k1: float = 0.7
@@ -96,70 +86,165 @@ class EnvRewardArgs:
     dist_entering_slope1_k1: float = 0.0
     dist_entering_slope2_k2: float = 0.0
 
+        # RULE 5b: Endanger (TTC + THW), but not to the point of no return!
+    
+    egoadv_blocking_baseline_N: float = 0.4 # Trough
+    egoadv_blocking_peak_P: float = 2.0 # Crest
+    egoadv_blocking_rise_slope_k1: float = 4.5
+    egoadv_blocking_decay_slope_k2: float = 0.8
+    egoadv_blocking_rise_shift_a: float = 1.4
+    egoadv_blocking_decay_shift_b: float = 3.0
 
-    # Sandwiching and occupancy corridor parameters
+    egoadv_release_baseline_N: float = 0.4 # Trough
+    egoadv_release_peak_P: float = 0.2 # Crest
+    egoadv_release_rise_slope_k1: float = 2.4
+    egoadv_release_decay_slope_k2: float = 1.3
+    egoadv_release_rise_shift_a: float = 3.6
+    egoadv_release_decay_shift_b: float = 6.0
+
+    egoadv_entering_baseline_N: float = 0.0
+    egoadv_entering_peak_P: float = 0.0
+    egoadv_entering_rise_slope_k1: float = 1.0
+    egoadv_entering_decay_slope_k2: float = 1.0
+    egoadv_entering_rise_shift_a: float = 0.0
+    egoadv_entering_decay_shift_b: float = 0.0
+
+    thw_base_reward_A: float = 0.67 # At 0
+    thw_wideness_k: float = 2.5
+    thw_yoffset_B: float = 0.0
+
+        # RULE 5c: Don't make the ego stop driving!
+
+    adv_ego_speed_penalty: float = -0.9
+
+        # RULE 5d: Try match speed with the ego!
+
+    adv_speed_matching_base_reward_A: float = 0.5
+    adv_speed_matching_wideness_k: float = 16 # How wide the exp decay function is
+    adv_speed_matching_yoffset_B: float = -0.1 # How much the exp decay function is shifted up or down
+
+        # RULE 5e: Sandwich the ego!
 
     longitudinal_occupancy_longitudinal_corridor: float = 25.0 # meters
     lateral_occupancy_longitudinal_corridor: float = 10.0  # meters
     lane_keeping_corridor: float = 2.0 # meters
 
     ellipse_base_a: float = 20.0      # Base longitudinal radius (meters)
-    ellipse_b: float = 3.5            # Lateral radius (slightly less than a lane width)
+    ellipse_b: float = 5.0            # Lateral radius (slightly less than a lane width)
     speed_k: float = 0.5              # How much the ellipse stretches with ego speed
 
-    base_proximity_reward: float = 0.30
+    base_proximity_reward: float = 0.14 # Boundary of ellipse 0.38 max
     sandwich_bonus: float = 1.0
 
-    # Lane keeping reward parameters
+        # RULE 5f: Let the ego reach the exit ramp successfully!
 
-    max_lane_penalty: float = 0.4 # Affects amplitude of the penalty
-    boundary_hit_penalty: float = -0.35 # Negative reward
-
-    # Adversarial crash parameters
-
-    adv_crash_base_penalty_A: float = -8.0 # Don't crash yourself!
-    adv_crash_wideness_k: float = 60.0 # How wide the exp decay function is
-    adv_crash_yoffset_B: float = 0.0 # How much the exp decay function is shifted up or down
-
-    # Speed matching parameters
-
-    adv_speed_matching_base_reward_A: float = 0.5
-    adv_speed_matching_wideness_k: float = 16 # How wide the exp decay function is
-    adv_speed_matching_yoffset_B: float = -0.1 # How much the exp decay function is shifted up or down
-
-    # Simple addition reward parameters
-
-    ego_crash_penalty: float = -11.0 # Don't make ego crash!
+    ego_crash_penalty: float = -9.0 # Don't make ego crash!
     ego_reach_exit_reward: float = 6.0 # Let ego reach exit!
-    adv_reverse_penalty: float = -1.0 # Don't reverse!
-    adv_ego_speed_penalty: float = -0.9 # Don't make ego go below speed lim
 
 
-    """
-    # Adversary-to-Adversary TTC Penalties
-
-    adv_adv_ttc_close_penalty: float = -50.0
-
-    adv_adv_ttc_near_m: float = -60.0
-    adv_adv_ttc_near_b: float = 10.0
-
-    adv_adv_ttc_far_m: float = -2.0
-    adv_adv_ttc_far_b: float = 24.0
-
-    # Adversary-to-Ego TTC Penalties
-
-    adv_ego_ttc_close_penalty: float = -60.0
-
-    adv_ego_ttc_near_a: float = -20.8
-    adv_ego_ttc_near_h: float = 2.8
-    adv_ego_ttc_near_k: float = 100.0
-
-    adv_ego_ttc_far_m: float = -6.25
-    adv_ego_ttc_far_b: float = 15.0
-
-    adv_release_phase_m: float = 12.5
-    adv_release_phase_b: float = -70.0
-    """
+    def __post_init__(self):
+        # Blocking and release parameters
+        
+        self.release_distance = 20.0
+    
+        # RULE 1: Don't crash yourself!
+        
+        self.adv_crash_base_penalty_A = -8.0 # Don't crash yourself!
+        self.adv_crash_wideness_k = 60.0 # How wide the exp decay function is
+        self.adv_crash_yoffset_B = 0.0 # How much the exp decay function is shifted up or down
+    
+        # RULE 2: Stay off the lane boundaries!
+    
+        self.max_lane_penalty = 0.24 # Affects amplitude of the penalty
+        self.boundary_hit_penalty = -0.35 # Negative reward
+    
+        # RULE 3: No reversing on the highway!
+    
+        self.adv_reverse_penalty = -1.0 # Don't reverse!
+    
+        # RULE 4: Take care of your team!
+    
+        self.advadv_baseline_N = 0.23
+        self.advadv_peak_P = 0.05
+        self.advadv_rise_slope_k1 = 0.8
+        self.advadv_decay_slope_k2 = 0.3
+        self.advadv_rise_shift_a = 3.4
+        self.advadv_decay_shift_b = 9.5
+    
+        # RULE 5: Bully the ego!
+    
+            # RULE 5a: You can't bully the ego from afar!
+        
+        self.dist_blocking_base1_c1 = 0.37 # First mag
+        self.dist_blocking_base2_c2 = -0.1 # Second mag
+        self.dist_blocking_base3_c3 = -0.5 # Third mag
+        self.dist_blocking_down1_a = 10
+        self.dist_blocking_down2_b = 49.4
+        self.dist_blocking_slope1_k1 = 0.7
+        self.dist_blocking_slope2_k2 = 0.2
+    
+        self.dist_entering_base1_c1 = 0.0
+        self.dist_entering_base2_c2 = 0.0
+        self.dist_entering_base3_c3 = 0.0
+        self.dist_entering_down1_a = 0.0
+        self.dist_entering_down2_b = 0.0
+        self.dist_entering_slope1_k1 = 0.0
+        self.dist_entering_slope2_k2 = 0.0
+    
+            # RULE 5b: Endanger (TTC + THW), but not to the point of no return!
+        
+        self.egoadv_blocking_baseline_N = 0.3 # Trough
+        self.egoadv_blocking_peak_P = 2.0 # Crest
+        self.egoadv_blocking_rise_slope_k1 = 4.5
+        self.egoadv_blocking_decay_slope_k2 = 0.8
+        self.egoadv_blocking_rise_shift_a = 1.4
+        self.egoadv_blocking_decay_shift_b = 3.0
+    
+        self.egoadv_release_baseline_N = 0.4 # Trough
+        self.egoadv_release_peak_P = 0.2 # Crest
+        self.egoadv_release_rise_slope_k1 = 2.4
+        self.egoadv_release_decay_slope_k2 = 1.3
+        self.egoadv_release_rise_shift_a = 3.6
+        self.egoadv_release_decay_shift_b = 6.0
+    
+        self.egoadv_entering_baseline_N = 0.0
+        self.egoadv_entering_peak_P = 0.0
+        self.egoadv_entering_rise_slope_k1 = 1.0
+        self.egoadv_entering_decay_slope_k2 = 1.0
+        self.egoadv_entering_rise_shift_a = 0.0
+        self.egoadv_entering_decay_shift_b = 0.0
+    
+        self.thw_base_reward_A = 0.67 # At 0
+        self.thw_wideness_k = 2.5
+        self.thw_yoffset_B = 0.0
+    
+            # RULE 5c: Don't make the ego stop driving!
+    
+        self.adv_ego_speed_penalty = -1.1 *(self.egoadv_blocking_peak_P + self.dist_blocking_base1_c1 + self.thw_base_reward_A + self.adv_speed_matching_base_reward_A + self.base_proximity_reward * 2 + self.sandwich_bonus)
+    
+            # RULE 5d: Try match speed with the ego!
+    
+        self.adv_speed_matching_base_reward_A = 0.5
+        self.adv_speed_matching_wideness_k = 16 # How wide the exp decay function is
+        self.adv_speed_matching_yoffset_B = -0.1 # How much the exp decay function is shifted up or down
+    
+            # RULE 5e: Sandwich the ego!
+    
+        self.longitudinal_occupancy_longitudinal_corridor = 25.0 # meters
+        self.lateral_occupancy_longitudinal_corridor = 10.0  # meters
+        self.lane_keeping_corridor = 2.0 # meters
+    
+        self.ellipse_base_a = 20.0      # Base longitudinal radius (meters)
+        self.ellipse_b = 5.0            # Lateral radius (slightly less than a lane width)
+        self.speed_k = 0.5              # How much the ellipse stretches with ego speed
+    
+        self.base_proximity_reward = 0.14 # Boundary of ellipse 0.38 max
+        self.sandwich_bonus = 1.0
+    
+            # RULE 5f: Let the ego reach the exit ramp successfully!
+    
+        self.ego_crash_penalty = -9.0 # Don't make ego crash!
+        self.ego_reach_exit_reward = 6.0 # Let ego reach exit!
 
 @dataclass
 class EnvArgs:
