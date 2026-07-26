@@ -510,6 +510,29 @@ class SpeedMatchingRewardFunction(RewardFunction):
 
         return v_values, rewards
 
+# class AdversarialSlowSpeedPenalty(RewardFunction):
+#     """
+#     Penalizes adversary for driving too slowly.
+#     """
+
+#     def __init__(self):
+#         super().__init__()
+
+#         self.adv_slow_speed_base_penalty_A = self.args.env.reward.adv_slow_speed_base_penalty_A
+#         self.adv_slow_speed_wideness_k = self.args.env.reward.adv_slow_speed_wideness_k
+#         self.adv_slow_speed_yoffset_B = self.args.env.reward.adv_slow_speed_yoffset_B
+
+#     def compute_reward(self, adv_speed):
+        
+#         return self.adv_slow_speed_base_penalty_A * np.exp(-adv_speed/self.adv_slow_speed_wideness_k) + self.adv_slow_speed_yoffset_B
+
+#     def take_data_points(self):
+#         v_values = np.linspace(0.0, 80.0, 251)
+
+#         rewards = [self.compute_reward(v) for v in v_values]
+
+#         return v_values, rewards
+
 
 # ===== VISUALIZATION CLASS ====== #
 

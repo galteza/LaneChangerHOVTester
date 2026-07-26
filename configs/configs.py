@@ -135,7 +135,7 @@ class EnvRewardArgs:
     speed_k: float = 0.5              # How much the ellipse stretches with ego speed
 
     base_proximity_reward: float = 0.14 # Boundary of ellipse 0.38 max
-    sandwich_bonus: float = 2.5
+    sandwich_bonus: float = 0.5
 
         # RULE 5f: Let the ego reach the exit ramp successfully!
 

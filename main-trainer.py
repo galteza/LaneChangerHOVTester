@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     # --- Fine-Tuning / Resuming Configuration ---
     # Set to True to load weights from a previous run before training
-    RESUME_TRAINING = True 
+    RESUME_TRAINING = False 
     # Set to your specific folder path, or None to skip straight to the newest run fallback.
     SPECIFIC_RUN_DIR = "runs/merge_exit_highway__configs__1__20260725-121841"
     # --------------------------------------------
