@@ -1,9 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 from configs.configs import RLArgs
 
 from highway_env.vehicle.kinematics import Vehicle
+
+# --- Slide-Ready Font Configuration ---
+plt.rcParams.update({
+    'font.size': 20,
+    'axes.titlesize': 24,
+    'axes.labelsize': 20,
+    'xtick.labelsize': 18,
+    'ytick.labelsize': 18,
+    'legend.fontsize': 18,
+    'lines.linewidth': 4  # Make the lines thicker so they don't get lost!
+})
 
 
 class RewardFunction:
@@ -450,10 +462,10 @@ class LaneKeepingRewardFunction(RewardFunction):
 
     def take_data_points(self):
         """
-        Plots the wave across multiple lanes to prove the continuity.
+        Plots the wave specifically for the target lane (-2 to 2).
         """
-        # Plot from -2 (left edge) to 10 (edge of 3rd lane)
-        y_values = np.linspace(-2.0, 10.0, 500) 
+        # Clamped from -2.0 to 2.0 for presentation slides
+        y_values = np.linspace(-2.0, 2.0, 500) 
         
         amplitude = self.max_lane_penalty / 2.0
         rewards = [amplitude * np.cos((2 * np.pi / self.lane_width_m) * y) - amplitude for y in y_values]
@@ -536,21 +548,20 @@ class SpeedMatchingRewardFunction(RewardFunction):
 
 # ===== VISUALIZATION CLASS ====== #
 
-
-    
 class FunctionVisualizer:
     """
     A utility class to visualize the continuous RL reward functions.
     """
     def __init__(self, 
-                 reward_ttc_ego_adv_function: RewardTTCEgoAdvFunction = None, 
-                 reward_ttc_adv_adv_function: RewardTTCAdvAdvFunction = None, 
-                 sandwiching_reward_function: SandwichingRewardFunction = None,
-                 lane_keeping_reward_function: LaneKeepingRewardFunction = None,
-                 adversarial_crash_penalty: AdversarialCrashPenalty = None,
-                 distance_to_ego_reward_function: DistanceToEgoRewardFunction = None,
-                 speed_matching_reward_function: SpeedMatchingRewardFunction = None,
-                 reward_thw_adv_ego_function: RewardTHWAdvEgoFunction = None,
+                 reward_ttc_ego_adv_function = None, 
+                 reward_ttc_adv_adv_function = None, 
+                 sandwiching_reward_function = None,
+                 lane_keeping_reward_function = None,
+                 adversarial_crash_penalty = None,
+                 distance_to_ego_reward_function = None,
+                 speed_matching_reward_function = None,
+                 reward_thw_adv_ego_function = None,
+                 output_dir="reward_plots"  # Added output directory parameter
                  ):
         
         self.reward_ttc_ego_adv_function = reward_ttc_ego_adv_function
@@ -561,14 +572,21 @@ class FunctionVisualizer:
         self.distance_to_ego_reward_function = distance_to_ego_reward_function
         self.speed_matching_reward_function = speed_matching_reward_function
         self.reward_thw_adv_ego_function = reward_thw_adv_ego_function
-    
+        
+        # Create the directory if it doesn't exist
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    def _save_and_close(self, filename: str):
+        """Helper method to save the figure and clear it from memory."""
+        filepath = os.path.join(self.output_dir, filename)
+        plt.tight_layout()
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved: {filepath}")
 
     def plot_ttc_functions(self):
-        """
-        Plots the 1D line graphs for the Time-to-Collision (TTC) reward functions.
-        """
         plt.figure(figsize=(10, 6))
-        
         has_plots = False
 
         if self.reward_ttc_adv_adv_function:
@@ -587,163 +605,131 @@ class FunctionVisualizer:
             print("No TTC reward functions provided to visualize.")
             return
 
-        plt.title('Reward Function based on Time-to-Collision (TTC)')
-        plt.xlabel('Time-to-Collision (seconds)')
-        plt.ylabel('Reward')
+        plt.title('Reward Function vs. Time-to-Collision (TTC)')
+        plt.xlabel('TTC [s]')
+        plt.ylabel('R(TTC)')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
-        plt.show()
+        
+        # Save instead of show
+        self._save_and_close("ttc_functions.png")
 
     def plot_thw_function(self):
-        """
-        Plots the 1D line graph for the Time Headway (THW) reward function.
-        """
         if not self.reward_thw_adv_ego_function:
             print("No THW reward function provided to visualize.")
             return
 
         thw_vals, rewards = self.reward_thw_adv_ego_function.take_data_points()
-        
         plt.figure(figsize=(10, 6))
         plt.plot(thw_vals, rewards, label='Adv-Ego Reward vs THW', color='green', linewidth=2)
-        
-        plt.title('Reward Function based on Time Headway (THW)')
-        plt.xlabel('Time Headway (seconds)')
-        plt.ylabel('Reward')
+        plt.title('Reward vs. Time Headway (THW)')
+        plt.xlabel('THW [s]')
+        plt.ylabel('R(THW)')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
-        plt.show()
+        
+        self._save_and_close("thw_function.png")
 
     def plot_sandwiching_ellipse(self, ego_speed: float = 25.0):
-        """
-        Plots the 2D spatial heatmap for the dynamic risk ellipse around the ego vehicle.
-        """
         if not self.sandwiching_reward_function:
             print("No SandwichingRewardFunction provided to visualize.")
             return
 
-        # Grab the 2D grid data from the sandwiching function
         X, Y, Rewards = self.sandwiching_reward_function.take_data_points(current_ego_speed=ego_speed)
-        
         plt.figure(figsize=(12, 6))
-        
-        # Plot the spatial heatmap using a contour plot
-        # 'inferno' or 'viridis' are great colormaps for this
         cp = plt.contourf(X, Y, Rewards, levels=50, cmap='inferno')
         plt.colorbar(cp, label='Base Proximity Reward')
-        
-        # Mark the Ego Vehicle at the center of the grid
         plt.plot(0, 0, 'w*', markersize=15, markeredgecolor='black', label='Ego Vehicle (0,0)')
         
-        # Formatting
         plt.title(f'Dynamic Risk Ellipse Heatmap (Ego Speed = {ego_speed} m/s)')
-        plt.xlabel('Longitudinal Distance from Ego (meters)')
-        plt.ylabel('Lateral Distance from Ego (meters)')
+        plt.xlabel('Longitudinal Distance from Ego [m]')
+        plt.ylabel('Lateral Distance from Ego [m]')
         plt.grid(color='white', linestyle='--', alpha=0.2)
         plt.legend()
-        
-        # Set aspect ratio to equal so the ellipse doesn't stretch artificially
         plt.gca().set_aspect('equal', adjustable='box')
-        plt.show()
+        
+        self._save_and_close("sandwiching_ellipse.png")
 
     def plot_lane_keeping_function(self):
-        """
-        Plots the 1D cosine wave for the continuous lane-keeping penalty.
-        """
         if not self.lane_keeping_reward_function:
             print("No LaneKeepingRewardFunction provided to visualize.")
             return
             
         y_vals, rewards = self.lane_keeping_reward_function.take_data_points()
-        
         plt.figure(figsize=(10, 6))
-        plt.plot(y_vals, rewards, label='Continuous Lane Keeping Penalty', color='green', linewidth=2)
         
-        # Add visual markers for the lane centers to prove the math aligns
-        # Assuming standard lane centers at 0, 4, 8
-        for center in [0, 4, 8]:
-            label = 'Lane Center' if center == 0 else ""
-            plt.axvline(x=center, color='gray', linestyle='--', alpha=0.6, label=label)
+        # Thicker line for visibility
+        plt.plot(y_vals, rewards, label='Reward vs. Lateral position (y)', color='green', linewidth=4)
+        
+        # Only plot the center of the lane we are looking at (0)
+        plt.axvline(x=0, color='gray', linestyle='--', alpha=0.8, linewidth=3, label='Lane Center')
             
         plt.title('Lane Keeping Penalty (Cosine Wave)')
-        plt.xlabel('Lateral Position (meters)')
-        plt.ylabel('Penalty')
+        plt.xlabel('y [m]')
+        plt.ylabel('R(y)')
+        
+        # Force the X-axis bounds so Matplotlib doesn't add extra padding
+        plt.xlim(-2, 2)
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Deduplicate legend labels
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         plt.legend(by_label.values(), by_label.keys(), loc='lower right')
         
-        plt.show()
+        self._save_and_close("lane_keeping_function.png")
 
     def plot_adversarial_crash_penalty(self):
-        """
-        Plots the 1D exponential decay for the adversarial crash penalty.
-        """
         if not self.adversarial_crash_penalty:
             print("No AdversarialCrashPenalty provided to visualize.")
             return
             
         steps, rewards = self.adversarial_crash_penalty.take_data_points()
-        
         plt.figure(figsize=(10, 6))
         plt.plot(steps, rewards, label='Adversarial Crash Penalty', color='red', linewidth=2)
-        
-        plt.title('Adversarial Crash Penalty (Exponential Decay)')
-        plt.xlabel('Steps Since Crash')
-        plt.ylabel('Penalty')
+        plt.title('Crash Penalty vs. Steps Since Adversarial Crash (SSC)')
+        plt.xlabel('SSC')
+        plt.ylabel('R(SSC)')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
         
-        plt.show()
+        self._save_and_close("adversarial_crash_penalty.png")
 
     def plot_distance_to_ego_function(self):
-        """
-        Plots the 1D double sigmoid for the distance to ego penalty.
-        """
         if not self.distance_to_ego_reward_function:
             print("No DistanceToEgoRewardFunction provided to visualize.")
             return
 
+        plt.figure(figsize=(10, 6))
         for phase, color in zip(["BLOCKING", "RELEASE", "ENTERING"], ['green', 'orange', 'red']):
             self.distance_to_ego_reward_function.set_phase(phase)
             distances, rewards = self.distance_to_ego_reward_function.take_data_points()
             plt.plot(distances, rewards, label=f'Distance to Ego Penalty [{phase}]', color=color, linewidth=2)
         
-        plt.title('Distance to Ego Penalty (Double Sigmoid)')
-        plt.xlabel('Distance to Ego (meters)')
-        plt.ylabel('Penalty')
+        plt.title('Reward vs. Distance to Ego')
+        plt.xlabel('Δx [m]')
+        plt.ylabel('R(Δx)')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
         
-        plt.show()
+        self._save_and_close("distance_to_ego_function.png")
 
     def plot_speed_matching_function(self):
-        """
-        Plots the 1D exponential decay for the speed matching penalty.
-        """
         if not self.speed_matching_reward_function:
             print("No SpeedMatchingRewardFunction provided to visualize.")
             return
             
         relative_speeds, rewards = self.speed_matching_reward_function.take_data_points()
-        
         plt.figure(figsize=(10, 6))
         plt.plot(relative_speeds, rewards, label='Speed Matching Penalty', color='purple', linewidth=2)
-        
-        plt.title('Speed Matching Penalty (Exponential Decay)')
-        plt.xlabel('Relative Speed (m/s)')
-        plt.ylabel('Penalty')
+        plt.title('Reward vs. Relative Speed')
+        plt.xlabel(r'$Δv_x$' + '[m/s]')
+        plt.ylabel(r'$R(Δv_x)$')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
         
-        plt.show()
+        self._save_and_close("speed_matching_function.png")
 
     def plot_all(self):
-        """
-        Convenience method to plot all available reward functions.
-        """
         self.plot_ttc_functions()
         self.plot_thw_function()
         self.plot_sandwiching_ellipse()

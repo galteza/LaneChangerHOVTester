@@ -850,4 +850,4 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         # =====
         
         # Turn next observation into shape RL can read (flatten) and return everything
-        return self.observation(_obs), collective_reward, terminated, truncated, info
+        return self.observation(_obs), raw_reward, terminated, truncated, info
