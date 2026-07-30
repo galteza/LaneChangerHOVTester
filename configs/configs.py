@@ -145,7 +145,12 @@ class EnvRewardArgs:
 
     def __post_init__(self):
         
-        self.adv_ego_speed_penalty = -1.1 *(self.egoadv_blocking_peak_P + self.dist_blocking_base1_c1 + self.thw_base_reward_A + self.adv_speed_matching_base_reward_A + self.base_proximity_reward * 2 + self.sandwich_bonus)
+        self.adv_ego_speed_penalty = -1.1 *(self.egoadv_blocking_peak_P + \
+        self.dist_blocking_base1_c1 + \
+        self.thw_base_reward_A + \
+        self.adv_speed_matching_base_reward_A + \
+        self.base_proximity_reward * 2 + \
+        self.sandwich_bonus)
     
 
 @dataclass

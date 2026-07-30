@@ -771,7 +771,15 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         formatted_actions = tuple(tuple(action[i]) for i in range(self.adv_agents))
         
         # Step the underlying simulation engine
-        _obs, reward, terminated, truncated, info = self.env.step(formatted_actions)
+        _obs, raw_reward, terminated, truncated, info = self.env.step(formatted_actions)
+
+        # 1. COLLAPSE REWARD EARLY so we can save it in the JSON
+        if isinstance(raw_reward, (list, tuple, np.ndarray)):
+            collective_reward = float(np.mean(raw_reward))
+        elif isinstance(raw_reward, dict):
+            collective_reward = float(np.mean(list(raw_reward.values())))
+        else:
+            collective_reward = float(raw_reward)
 
         # ====== farming dangerous moments for k-means clustering ======
         env = self.env.unwrapped
@@ -783,7 +791,6 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         if victim is not None and not victim.crashed:
             adv_features = []
             
-            # 1. Gather stats for all living adversaries
             for adv in env.controlled_vehicles:
                 if not adv.crashed:
                     current_ttc = PolygonTTCCalculator.compute_ttc(adv, victim)
@@ -798,13 +805,10 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                         'rel_vy': adv.velocity[1] - victim.velocity[1],
                     })
             
-            # 2. If we have adversaries, find the climax
             if adv_features:
-                # Sort by distance to ego to identify the primary and secondary attackers
                 adv_features.sort(key=lambda x: x['dist_to_ego'])
                 min_ttc = min(f['ttc'] for f in adv_features)
                 
-                # 3. Build the multi-agent snapshot if risk is high enough
                 if min_ttc < 4.0:
                     adv1 = adv_features[0]
                     climax_snapshot = {
@@ -812,11 +816,16 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                         'adv1_rel_y': adv1['rel_y'],
                         'adv1_rel_vx': adv1['rel_vx'],
                         'adv1_rel_vy': adv1['rel_vy'],
-                        'ego_abs_vel': victim.velocity[0],
-                        'ego_lane_id': victim.lane_index[2] 
+                        'ego_abs_vel': float(victim.velocity[0]),
+                        'ego_lane_id': int(victim.lane_index[2]),
+                        
+                        # ---> INJECT REWARDS HERE <---
+                        'collective_reward': collective_reward,
+                        
+                        # Optional: Also save the raw array of rewards if you want to see who scored what
+                        'raw_individual_rewards': list(raw_reward) if isinstance(raw_reward, (list, tuple, np.ndarray)) else raw_reward
                     }
                     
-                    # Add the second adversary and the inter-adversary metrics if available
                     if len(adv_features) >= 2:
                         adv2 = adv_features[1]
                         inter_dist = np.hypot(adv1['rel_x'] - adv2['rel_x'], adv1['rel_y'] - adv2['rel_y'])
@@ -830,7 +839,6 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
                             'inter_adv_rel_vel': float(inter_vel)
                         })
                     else:
-                        # Fallback if only 1 adversary is alive
                         climax_snapshot.update({
                             'adv2_rel_x': 0.0, 'adv2_rel_y': 0.0, 'adv2_rel_vx': 0.0,
                             'inter_adv_dist': 0.0, 'inter_adv_rel_vel': 0.0
@@ -840,14 +848,6 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         if climax_snapshot is not None:
             info['kmeans_snapshot'] = climax_snapshot
         # =====
-
-        # Collapse individual vehicle rewards into your global training scalar
-        if isinstance(reward, (list, tuple, np.ndarray)):
-            collective_reward = float(np.mean(reward))
-        elif isinstance(reward, dict):
-            collective_reward = float(np.mean(list(reward.values())))
-        else:
-            collective_reward = float(reward)
         
         # Turn next observation into shape RL can read (flatten) and return everything
-        return self.observation(_obs), reward, terminated, truncated, info
+        return self.observation(_obs), collective_reward, terminated, truncated, info
