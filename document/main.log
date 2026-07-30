@@ -1,4 +1,4 @@
-This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  26 JUL 2026 22:09
+This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  30 JUL 2026 19:07
  restricted system commands enabled.
  file:line:error style messages enabled.
 **/home/gabalteza/LaneChangerHOVTester/document/main
@@ -798,40 +798,37 @@ Overfull \hbox (5.25682pt too wide) in paragraph at lines 329--332
 
 LaTeX Warning: Reference `fig:highway_env' on page 8 undefined on input line 370.
 
-[8] [9] [10]
+[8] [9] [10] [11]
 
-LaTeX Warning: Citation `7637091' on page 11 undefined on input line 538.
+LaTeX Warning: Citation `7637091' on page 12 undefined on input line 626.
 
-[11]
-Overfull \hbox (11.81291pt too wide) in paragraph at lines 549--550
+[12]
+Overfull \hbox (11.81291pt too wide) in paragraph at lines 637--638
 []\TU/lmr/m/n/12 The four equa-tions rep-re-sent-ing the above nor-mal-ized lane-utility val-ues $\OML/cmm/m/it/12 U[]$\TU/lmr/m/n/12 ,
  []
 
-[12] [13] [14]
+[13] [14] [15]
 No file main.bbl.
-[15] (./main.aux)
+[16] (./main.aux)
 
 LaTeX Warning: There were undefined references.
-
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
 
 )
 
 Here is how much of LuaTeX's memory you used:
  8380 strings out of 477805
  305787,662416 words of node,token memory allocated
- 38205 words of node memory still in use:
-   11 hlist, 2 vlist, 5 rule, 2 glue, 443 kern, 1 glyph, 12742 attribute, 1696 glue_spec, 663 attribute_list, 1 write, 112 user_defined nodes
-   avail lists: 1:41,2:74908,3:186,4:434,5:184,6:43,7:7550,8:71,9:739,10:26,11:591
+ 40902 words of node memory still in use:
+   11 hlist, 2 vlist, 5 rule, 2 glue, 455 kern, 1 glyph, 13666 attribute, 1825 glue_spec, 711 attribute_list, 1 write, 124 user_defined nodes
+   avail lists: 1:41,2:73936,3:186,4:422,5:184,6:43,7:7550,8:71,9:739,10:26,11:591
  28642 multiletter control sequences out of 65536+600000
  67 fonts using 54666047 bytes
  100i,19n,99p,1829b,353s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/share/texmf/fonts/opentype/public/lm/lmroman6-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman8-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-bold.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-regular.otf></usr/share/texlive/texmf-dist/fonts/truetype/public/ipaex/ipaexm.ttf></usr/share/texmf/fonts/opentype/public/lm/lmroman17-regular.otf></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (16 pages, 814298 bytes).
+Output written on main.pdf (17 pages, 822226 bytes).
 
-PDF statistics: 146 PDF objects out of 1000 (max. 8388607)
- 93 compressed objects within 1 object stream
+PDF statistics: 149 PDF objects out of 1000 (max. 8388607)
+ 95 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 131072)
  1 words of extra memory for PDF output out of 10000 (max. 100000000)
 

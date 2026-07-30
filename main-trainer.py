@@ -42,7 +42,7 @@ class RiskDataFarmer:
         
         os.makedirs("risk_events", exist_ok=True)
 
-    def step_update(self, env_unwrapped):
+    def step_update(self, env_unwrapped, info):
         ego = env_unwrapped.ego
         if ego is None or ego.crashed:
             return
@@ -54,8 +54,6 @@ class RiskDataFarmer:
             'advs': []
         }
 
-        # 2. Extract relative data for the K-Means climax snapshot
-        adv_features = []
         for adv in env_unwrapped.controlled_vehicles:
             if not adv.crashed:
                 # Trajectory data
@@ -63,47 +61,16 @@ class RiskDataFarmer:
                     'x': float(adv.position[0]),
                     'y': float(adv.position[1])
                 })
-                
-                # K-Means Data: Relative to Ego
-                dist = np.linalg.norm(adv.position - ego.position)
-                adv_features.append({
-                    'dist_to_ego': float(dist),
-                    'rel_x': float(adv.position[0] - ego.position[0]),
-                    'rel_y': float(adv.position[1] - ego.position[1]),
-                    'rel_vx': float(adv.velocity[0] - ego.velocity[0]),
-                    'rel_vy': float(adv.velocity[1] - ego.velocity[1]),
-                    'ttc': PolygonTTCCalculator.compute_ttc(adv, ego)
-                })
         
         self.history.append(current_frame)
 
-        # 3. Check for the climax (minimum TTC)
-        if len(adv_features) >= 2:
-            # Sort adversaries by distance to ego
-            adv_features.sort(key=lambda x: x['dist_to_ego'])
-            current_min_ttc = min([f['ttc'] for f in adv_features])
-
-            if current_min_ttc < self.min_ttc_this_ep:
-                self.min_ttc_this_ep = current_min_ttc
-                
-                # Inter-adversary metrics (Adv 1 vs Adv 2)
-                adv1, adv2 = adv_features[0], adv_features[1]
-                inter_adv_dist = np.hypot(adv1['rel_x'] - adv2['rel_x'], adv1['rel_y'] - adv2['rel_y'])
-                inter_adv_vel = np.hypot(adv1['rel_vx'] - adv2['rel_vx'], adv1['rel_vy'] - adv2['rel_vy'])
-
-                # Save the exact K-Means features you requested
-                self.climax_data = {
-                    'adv1_rel_x': adv1['rel_x'],
-                    'adv1_rel_y': adv1['rel_y'],
-                    'adv1_rel_vx': adv1['rel_vx'],
-                    'adv2_rel_x': adv2['rel_x'],
-                    'adv2_rel_y': adv2['rel_y'],
-                    'adv2_rel_vx': adv2['rel_vx'],
-                    'inter_adv_dist': float(inter_adv_dist),
-                    'inter_adv_rel_vel': float(inter_adv_vel),
-                    'ego_abs_vel': float(ego.velocity[0])
-                }
-                # Lock in the trajectory history leading up to this exact moment
+        # 2. Read the climax snapshot directly from the wrapper's info dictionary!
+        if 'min_ttc' in info and info['min_ttc'] < self.min_ttc_this_ep:
+            self.min_ttc_this_ep = info['min_ttc']
+            
+            if 'kmeans_snapshot' in info:
+                # This automatically pulls in the rewards you injected in the wrapper!
+                self.climax_data = info['kmeans_snapshot']
                 self.climax_history = list(self.history)
 
     def on_episode_end(self, episode_id):
@@ -252,7 +219,7 @@ if __name__ == "__main__":
             # ENV STEP: Take next step in environment using chosen actions
 
             next_flat_obs, reward, done, truncated, info = wrapped_training_env.step(actions)
-            farmer.step_update(wrapped_training_env.unwrapped) # Update the risk data farmer with the current state of the environment
+            farmer.step_update(wrapped_training_env.unwrapped, info) # Update the risk data farmer with the current state of the environment
 
             reward_cumulative += reward
             step_counter += 1

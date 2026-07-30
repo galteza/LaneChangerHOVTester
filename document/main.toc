@@ -18,9 +18,9 @@
 \contentsline {subsubsection}{Observation Space}{8}{}%
 \contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{9}{}%
 \contentsline {subsubsection}{Reward Function}{10}{}%
-\contentsline {subsubsection}{}{11}{}%
-\contentsline {section}{\numberline {0.5}Results \& Discussion}{11}{}%
-\contentsline {section}{\numberline {0.6}Conclusion}{11}{}%
-\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{11}{}%
-\contentsline {section}{\numberline {0.7}Appendix}{11}{}%
-\contentsline {subsubsection}{LC Global Planner}{12}{}%
+\contentsline {subsubsection}{}{12}{}%
+\contentsline {section}{\numberline {0.5}Results \& Discussion}{12}{}%
+\contentsline {section}{\numberline {0.6}Conclusion}{12}{}%
+\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{12}{}%
+\contentsline {section}{\numberline {0.7}Appendix}{12}{}%
+\contentsline {subsubsection}{LC Global Planner}{13}{}%

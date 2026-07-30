@@ -460,25 +460,104 @@ fine tuning the reward function for the MASAC-RL agent.
     \end{enumerate}
 \end{enumerate}
 
+% No crashing
+\begin{equation}
+    R_{\mathrm{ssc}} = -6.7 \cdot e^{-\frac{\mathrm{ssc}}{60}}
+\end{equation}
+
+% Stay off lane boundaries
+\begin{equation}
+    R(y) = \frac{0.24}{2} \cdot \cos\left(\frac{2\pi}{4.0 \mathrm{[m]}} \cdot y\right) - \frac{0.24}{2}
+\end{equation}
+
+% No reversing
+\begin{equation}
+    R(v_x) = \begin{cases}
+        0 & \text{if } v_x \geq 0 \\
+        -1 & \text{if } v_x < 0
+    \end{cases}
+\end{equation}
+
+% Take care of your team
+\begin{equation}
+    R_{\mathrm{adv}}(ttc) = -0.4 + \frac{0.6}{1 + e^{-0.8 (ttc - 3.4)}} - \frac{0.2}{1 + e^{-0.3 (ttc - 9.5)}}
+\end{equation}
+
+% Be close to the ego
+\begin{equation}
+    R(d) = \begin{cases}
+        0 & \text{if ENTERING phase}\\
+        -0.5 + \frac{0.47}{1 + e^{0.7 (d - 10)}} + \frac{0.4}{1 + e^{0.2 (d - 49.4)}} & \text{if BLOCKING or RELEASE phase} \\
+    \end{cases}
+\end{equation}
+
+% Endanger ego vehicle TTC
 
 \begin{equation}
-    R(ttc) = -N + \frac{P + N}{1 + e^{-k_1 (ttc - a)}} - \frac{P}{1 + e^{-k_2 (ttc - b)}}
+    R(ttc) = \begin{cases}
+        0 & \text{if ENTERING phase} \\
+        -0.4 + \frac{3.9}{1 + e^{-4.5 (ttc - 1.4)}} - \frac{3.5}{1 + e^{-0.8 (ttc - 3.0)}} & \text{if BLOCKING phase} \\
+        -0.4 + \frac{0.6}{1 + e^{-2.4 (ttc - 3.6)}} - \frac{0.2}{1 + e^{-1.3 (ttc - 6.0)}} & \text{if RELEASE phase} \\
+    \end{cases}
+\end{equation}
+
+% Endanger ego vehicle THW
+\begin{equation}
+    R(thw) = 1.5 \cdot e^{-\frac{thw}{2.5}}
+\end{equation}
+
+% Match eqo speed when near
+\begin{equation}
+    R(\Delta v_{x}) = 0.5 \cdot e^{-\frac{|\Delta v_{x}|}{16}}
+\end{equation}
+
+% Sandwich the ego
+\begin{equation}
+    R_{\mathrm{platoon}} = R_{\mathrm{prox}} + R_{\mathrm{swarm}} + R_{\mathrm{sandwich}}
 \end{equation}
 
 \begin{equation}
-    R(d) = c_3 + \frac{c_1 - c_2}{1 + e^{k_1 (d - a)}} + \frac{c_2 - c_3}{1 + e^{k_2 (d - b)}}
+    a_{\mathrm{base}} = 20.0 \text{ [m]}
 \end{equation}
 
 \begin{equation}
-    R(x) = A \cdot e^{-\frac{x}{k}} + B
+    b_{\mathrm{ellipse}} = 5.0 \text{ [m]}
 \end{equation}
 
 \begin{equation}
-    R(y) = \frac{P_{max}}{2} \cdot \cos\left(\frac{2\pi}{W_{lane}} \cdot y\right) - \frac{P_{max}}{2}
+    k_{\mathrm{speed}} = 0.5 \text{ [m/(m/s)]}
 \end{equation}
 
 \begin{equation}
-    a_{ellipse} = a_{base} + k_{speed} \cdot \max(0, v_{ego})
+    R_{\mathrm{base}} = 0.14
+\end{equation}
+
+\begin{equation}
+    R_{\mathrm{sandwich}} = \begin{cases}
+        0.5 & \text{if involved in sandwiching maneuver} \\
+        0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+where 
+\begin{list}{-}{spacing}
+    \item \(a_{\mathrm{ellipse}}\) is the semi-major axis of the ellipse, 
+    \item \(b_{\mathrm{ellipse}}\) is the semi-minor axis of the ellipse, 
+    \item \(k_{\mathrm{speed}}\) is a scaling factor for the stretch of the ellipse based on ego speed,
+    \item \(R_{\mathrm{base}}\) is the base reward for proximity,
+    \item \(R_{\mathrm{sandwich}}\) is the additional reward for sandwiching the ego vehicle.
+    \item \(dx\) is the longitudinal distance between the adversary and the ego vehicle,
+    \item \(dy\) is the lateral distance between the adversary and the ego vehicle
+    \item \(d_{ell}\) is the normalized distance of the adversary from the ego vehicle based on the ellipse,
+    \item \(R_{prox}\) is the reward for proximity to the ego vehicle,
+    \item \(R_{swarm}\) is the reward for the number of adversaries
+    \item \(R_{sandwich}\) is the reward for sandwiching the ego vehicle.
+\end{list}
+
+
+
+\begin{equation}
+    a_{\mathrm{ellipse}} = a_{\mathrm{base}} + k_{\mathrm{speed}} \cdot \max(0, v_{\mathrm{ego}})
 \end{equation}
 
 
@@ -492,9 +571,18 @@ fine tuning the reward function for the MASAC-RL agent.
 \end{equation}
 
 \begin{equation}
-    R_{swarm} = 0.05 \cdot (2^{N_{vehicles}} - 1)
+    R_{swarm}(N_{\mathrm{vehicles}}) = 0.05 \cdot (2^{N_{\mathrm{vehicles}}} - 1)
 \end{equation}
 
+
+
+\begin{equation}
+    -N + \frac{P + N}{1 + e^{-k_1 (ttc - a)}} - \frac{P}{1 + e^{-k_2 (ttc - b)}}
+\end{equation}
+
+\begin{equation}
+    R(x) = A \cdot e^{-\frac{x}{k}} + B
+\end{equation}
 
 
 

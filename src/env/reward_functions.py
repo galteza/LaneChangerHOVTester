@@ -585,14 +585,9 @@ class FunctionVisualizer:
         plt.close()
         print(f"Saved: {filepath}")
 
-    def plot_ttc_functions(self):
+    def plot_ego_ttc_functions(self):
         plt.figure(figsize=(10, 6))
         has_plots = False
-
-        if self.reward_ttc_adv_adv_function:
-            ttc_vals, rewards = self.reward_ttc_adv_adv_function.take_data_points()
-            plt.plot(ttc_vals, rewards, label=f'Adv-Adv Reward vs TTC', color='blue', linewidth=2)
-            has_plots = True
             
         if self.reward_ttc_ego_adv_function:
             for i, (phase, color) in enumerate(zip(["BLOCKING", "RELEASE", "ENTERING"], ["green", "orange", "red"])):
@@ -612,7 +607,29 @@ class FunctionVisualizer:
         plt.legend()
         
         # Save instead of show
-        self._save_and_close("ttc_functions.png")
+        self._save_and_close("ego_ttc_functions.png")
+
+    def plot_adv_ttc_functions(self):
+            plt.figure(figsize=(10, 6))
+            has_plots = False
+    
+            if self.reward_ttc_adv_adv_function:
+                ttc_vals, rewards = self.reward_ttc_adv_adv_function.take_data_points()
+                plt.plot(ttc_vals, rewards, label=f'Adv-Adv Reward vs TTC', color='blue', linewidth=2)
+                has_plots = True
+    
+            if not has_plots:
+                print("No TTC reward functions provided to visualize.")
+                return
+    
+            plt.title('Reward Function vs. Time-to-Collision (TTC)')
+            plt.xlabel('TTC [s]')
+            plt.ylabel('R(TTC)')
+            plt.grid(True, linestyle='--', alpha=0.7)
+            plt.legend()
+            
+            # Save instead of show
+            self._save_and_close("adv_ttc_functions.png")
 
     def plot_thw_function(self):
         if not self.reward_thw_adv_ego_function:
@@ -729,11 +746,26 @@ class FunctionVisualizer:
         
         self._save_and_close("speed_matching_function.png")
 
+    def plot_simple_reward_function(self, reward_name: str, proper_reward_name: str = None):
+        simple_reward_function = SimpleRewardFunction()
+        reward_value = simple_reward_function.get_reward(reward_name)
+        
+        plt.figure(figsize=(6, 4))
+        plt.plot(np.linspace(-10, 10, 20), [reward_value]*20, label=f'Reward vs. {proper_reward_name}', color='blue')
+        plt.title(f'Reward vs. {proper_reward_name}')
+        plt.xlabel(proper_reward_name)
+        plt.ylabel(f'R({proper_reward_name})')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        
+        self._save_and_close(f"simple_reward_{reward_name}.png")
+
     def plot_all(self):
-        self.plot_ttc_functions()
+        self.plot_adv_ttc_functions()
+        self.plot_ego_ttc_functions()
         self.plot_thw_function()
         self.plot_sandwiching_ellipse()
         self.plot_lane_keeping_function()
         self.plot_distance_to_ego_function()
         self.plot_adversarial_crash_penalty()
         self.plot_speed_matching_function()
+        self.plot_simple_reward_function('adv_reverse_penalty', r'$v_x$ [m/s]')
