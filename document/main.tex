@@ -152,10 +152,67 @@ be considered are as follows.
     \end{bmatrix}
 \end{equation}
 
+\subsubsection{2D TTC}
+
+The 2D Time-to-Collision (TTC) is a metric used to evaluate the risk of collision between two vehicles in both longitudinal and lateral directions. It is defined as:
+\begin{equation}
+    TTC = \frac{DTC}{\sqrt{v_{\text{rel}}^2 + \epsilon}}
+\end{equation}
+where
+\begin{align}
+    DTC & \text{ is the minimum distance between the bounding boxes of vehicles along direction of relative velocity} \\
+    v_{\text{rel}} & \text{ is the relative velocity between the two vehicles} \\
+    \epsilon & \text{ is a small constant to avoid division by zero}
+\end{align}
+
 \subsubsection{Intelligent Driver Model (IDM) + Minimizing Overall Braking Induced by Lane Changes (MOBIL)}
 
 The IDM is a car-following model that describes the longitudinal dynamics of a vehicle based on its desired speed, and the 
 distance to the vehicle in front of it. The IDM is defined by the following equation:
+
+\begin{equation}
+    a = a_{\text{max}}\left(1 - \left(\frac{v}{v_0}\right)^{\delta} - \left(\frac{s^*(v, \Delta v)}{s}\right)^2\right)
+\end{equation}
+
+where
+\begin{align}
+    a & \text{ is the acceleration of the vehicle} \\
+    a_{\text{max}} & \text{ is the maximum acceleration} \\
+    v & \text{ is the current speed of the vehicle} \\
+    v_0 & \text{ is the desired speed of the vehicle} \\
+    \delta & \text{ is the acceleration exponent} \\
+    s & \text{ is the gap to the leading vehicle} \\
+    s^*(v, \Delta v) & \text{ is the desired minimum gap, a function of the current speed and speed difference} \\
+    \Delta v & \text{ is the speed difference to the leading vehicle}
+\end{align}
+
+The MOBIL model is a lane-changing model that describes the decision-making process of a vehicle when considering a lane change.
+It particularly looks at the acceleration gains and losses of the ego vehicle and its neighboring vehicles in order to evaluate
+the safety and incentives of a lane change. The model operates on the rules of (1) the required deceleration of the new follower
+not exceeding a safe braking threshold, and (2) the acceleration increase being greater than the total deceleration forced on the new follower.
+
+The latter rule is scaled by a politeness factor \(p\) that represents the ego vehicle's willingness to sacrifice its own acceleration gain 
+in order to reduce the deceleration of the new follower.
+
+The MOBIL model is defined by the following equation:
+
+\begin{equation}
+    a_{\text{new}} \geq -b_{\text{safe}}
+\end{equation}
+
+\begin{equation}
+\Delta a_{\text{ego}} + p \left( \Delta a_{\text{new}} + \Delta a_{\text{old}} \right) > a_{\text{th}}
+\end{equation}
+where
+\begin{align}
+    \Delta a_{\text{ego}} & \text{ is the acceleration gain of the ego vehicle} \\
+    \Delta a_{\text{new}} & \text{ is the acceleration loss of the new follower} \\
+    \Delta a_{\text{old}} & \text{ is the acceleration loss of the old follower} \\
+    p & \text{ is the politeness factor} \\
+    a_{\text{th}} & \text{ is the acceleration threshold}
+\end{align}
+
+
 
 \subsection{Reinforcement Learning}
 
@@ -176,9 +233,49 @@ parameterize a policy (the actor) and update it by optimizing the expected
 return (using policy gradients)
 
 \subsubsection{Soft Actor-Critic Reinforcement Learning}
+
+% Critic Loss Function
+$L_Q(\theta) = \mathbb{E}_{(s,a) \sim D} \left[ \frac{1}{2} \left( Q_\theta(s, a) - y \right)^2 \right]$
+
+% Critic Gradient Field
+$\nabla_\theta L_Q(\theta) = \mathbb{E}_{(s,a) \sim D} \left[ \nabla_\theta Q_\theta(s, a) \left( Q_\theta(s, a) - y \right) \right]$
+
+% Critic Weight Update
+$\theta_{\text{new}} = \theta_{\text{old}} - \eta \nabla_\theta L_Q(\theta)$    
+
+% Actor Objective Function
+$J_\pi(\phi) = \mathbb{E}_{s \sim D, \epsilon \sim \mathcal{N}} \left[ Q_\theta(s, f_\phi(\epsilon; s)) - \alpha \log \pi_\phi(f_\phi(\epsilon; s)|s) \right]$
+
+% Actor PyTorch Loss Function (Flipped Objective)
+$L_\pi(\phi) = -J_\pi(\phi) = \mathbb{E}_{s \sim D, \epsilon \sim \mathcal{N}} \left[ \alpha \log \pi_\phi(f_\phi(\epsilon; s)|s) - Q_\theta(s, f_\phi(\epsilon; s)) \right]$
+
+% Actor Gradient Field
+$\nabla_\phi L_\pi(\phi) = \mathbb{E}_{s \sim D, \epsilon \sim \mathcal{N}} \left[ \nabla_\phi \left( \alpha \log \pi_\phi(a|s) \right) - \nabla_a Q_\theta(s, a) \nabla_\phi f_\phi(\epsilon; s) \right]$
+
+% Actor Weight Update
+$\phi_{\text{new}} = \phi_{\text{old}} - \eta \nabla_\phi L_\pi(\phi)$
+
+
+% Bellman
+$y = r + \gamma (1 - d) \left[ \min_{i=1,2} Q_{\text{target}, i}(s', a') - \alpha \log \pi_\phi(a'|s') \right]$
+
+% Mean Squared Error (Standard Summation)
+$\text{MSE} = \frac{1}{N} \sum_{i=1}^{N} (y_i - \hat{y}_i)^2$
+
+% Mean Squared Error (Expected Value Form)
+$L = \mathbb{E} \left[ (y - \hat{y})^2 \right]$
+
+% Gradient descent
+
+% Gradient Descent Update Rule
+$\theta_{t+1} = \theta_t - \eta \nabla_\theta L(\theta_t)$
+
+% Gradient Ascent Update Rule
+$\theta_{t+1} = \theta_t + \eta \nabla_\theta J(\theta_t)$
+
 \subsubsection{Multi-Agent Reinforcement Learning}
 
-\subsection{Farama Foundation Gymnasium & Highway Environment Libraries}
+\subsection{Farama Foundation Gymnasium \& Highway Environment Libraries}
 
 The Farama Foundation has been a long-time provider of extensive libraries for reinforcement learning research and simulations. The Highway-Env library is a library
 that is built off of the Gymnasium library, which is a library that provides a framework for creating customisable environments, as well as premade environments, such as 
@@ -344,7 +441,77 @@ vehicle's unique observation.
 
 The reward function of the highway environment, as mentioned, is the part of the reinforcement learning
 framework that details the motivation of the agents to learn a specific behavior.
-As such, the reward
+As such, the following rule book was created for the adversarial vehicles to adhere to and was utilized in
+fine tuning the reward function for the MASAC-RL agent.
+
+\begin{enumerate}
+    \item The adversarial vehicle must NOT purposefully crash itself.
+    \item The adversarial vehicle must keep off of the lane and highway boundaries.
+    \item No reversing allowed on the highway.
+    \item The adversarial vehicles must be mindful of its other vehicles' safety.
+    \item The adversarial vehicles must bully the ego vehicle into high-risk scenarios without actually crashing into it.
+    \begin{enumerate}
+        \item The vehicle must be close to the ego as much as possible.
+        \item Leverage the time-to-collision (TTC) and time-headway (THW) metrics to bully the ego vehicle.
+        \item The vehicle must stay in the same lane as the ego vehicle whenever possible.
+        \item The adversary must try matching ego speed.
+        \item The adversaries gain more points when they perform a sandwiching maneuver on the ego vehicle.
+        \item Let the ego exit the highway successfully.
+    \end{enumerate}
+\end{enumerate}
+
+
+\begin{equation}
+    R(ttc) = -N + \frac{P + N}{1 + e^{-k_1 (ttc - a)}} - \frac{P}{1 + e^{-k_2 (ttc - b)}}
+\end{equation}
+
+\begin{equation}
+    R(d) = c_3 + \frac{c_1 - c_2}{1 + e^{k_1 (d - a)}} + \frac{c_2 - c_3}{1 + e^{k_2 (d - b)}}
+\end{equation}
+
+\begin{equation}
+    R(x) = A \cdot e^{-\frac{x}{k}} + B
+\end{equation}
+
+\begin{equation}
+    R(y) = \frac{P_{max}}{2} \cdot \cos\left(\frac{2\pi}{W_{lane}} \cdot y\right) - \frac{P_{max}}{2}
+\end{equation}
+
+\begin{equation}
+    a_{ellipse} = a_{base} + k_{speed} \cdot \max(0, v_{ego})
+\end{equation}
+
+
+\begin{equation}
+    d_{ell} = \left(\frac{dx}{a_{ellipse}}\right)^2 + \left(\frac{dy}{b_{ellipse}}\right)^2
+\end{equation}
+
+
+\begin{equation}
+    R_{prox} = R_{base} \cdot e^{1.0 - d_{ell}}
+\end{equation}
+
+\begin{equation}
+    R_{swarm} = 0.05 \cdot (2^{N_{vehicles}} - 1)
+\end{equation}
+
+
+
+
+
+
+\begin{equation}
+R = -N + \frac{P+N}{1+\exp(-k_1(x-a))} - \frac{P}{1+exp(-k_2(x-b))}
+\end{equation}
+\subsubsection{}
+\section{Results \& Discussion}
+\section{Conclusion}
+
+
+\subsection{Risk Evaluation Methods}
+
+
+\section{Appendix}
 
 \begin{equation}
 R_{adv-adv} = \begin{cases}
@@ -367,19 +534,6 @@ If release phase (lane changer less than 20 meters away from exit):
 \begin{equation}
 R_{adv-ego} = -6.25 \tau + 15 
 \end{equation}
-
-\begin{equation}
-R = -N + \frac{P+N}{1+\exp(-k_1(x-a))} - \frac{P}{1+exp(-k_2(x-b))}
-\end{equation}
-\subsubsection{}
-\section{Results \& Discussion}
-\section{Conclusion}
-
-
-\subsection{Risk Evaluation Methods}
-
-
-\section{Appendix}
 
 The pipeline of the lane-change maneuver of the ego vehicle involves the separation of the "if," "when," and "how" frameworks of the maneuver, as developed in \cite{7637091}. The "if" pertains to determining whether or not a lane-change maneuver into the next lane is appropriate. The "when" part aims to determine which gap to intrude into and when to begin the move. Lastly, the "how" pertains to the usage of low-level controllers to execute the maneuver according to the determined appropriate gap.
 

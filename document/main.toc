@@ -2,24 +2,25 @@
 \contentsline {section}{\numberline {0.2}Introduction}{2}{}%
 \contentsline {subsection}{\numberline {0.2.1}Lane Changing Models}{3}{}%
 \contentsline {subsubsection}{Kinematic Bicycle Model}{3}{}%
+\contentsline {subsubsection}{2D TTC}{3}{}%
 \contentsline {subsubsection}{Intelligent Driver Model (IDM) + Minimizing Overall Braking Induced by Lane Changes (MOBIL)}{3}{}%
-\contentsline {subsection}{\numberline {0.2.2}Reinforcement Learning}{3}{}%
-\contentsline {subsubsection}{Soft Actor-Critic Reinforcement Learning}{4}{}%
-\contentsline {subsubsection}{Multi-Agent Reinforcement Learning}{4}{}%
-\contentsline {subsection}{\numberline {0.2.3}Farama Foundation Gymnasium & Highway Environment Libraries}{4}{}%
-\contentsline {subsubsection}{Typical Training Pipeline}{4}{}%
-\contentsline {subsubsection}{Highway-Env Environment Initialization}{5}{}%
-\contentsline {section}{\numberline {0.3}Objectives}{5}{}%
-\contentsline {section}{\numberline {0.4}Methodology}{5}{}%
-\contentsline {subsection}{\numberline {0.4.1}Highway Environment}{5}{}%
-\contentsline {subsubsection}{Important Configurations}{5}{}%
-\contentsline {subsubsection}{Road Geometry}{6}{}%
-\contentsline {subsubsection}{Observation Space}{6}{}%
-\contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{7}{}%
-\contentsline {subsubsection}{Reward Function}{8}{}%
-\contentsline {subsubsection}{}{9}{}%
-\contentsline {section}{\numberline {0.5}Results \& Discussion}{9}{}%
-\contentsline {section}{\numberline {0.6}Conclusion}{9}{}%
-\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{9}{}%
-\contentsline {section}{\numberline {0.7}Appendix}{9}{}%
-\contentsline {subsubsection}{LC Global Planner}{9}{}%
+\contentsline {subsection}{\numberline {0.2.2}Reinforcement Learning}{4}{}%
+\contentsline {subsubsection}{Soft Actor-Critic Reinforcement Learning}{5}{}%
+\contentsline {subsubsection}{Multi-Agent Reinforcement Learning}{5}{}%
+\contentsline {subsection}{\numberline {0.2.3}Farama Foundation Gymnasium \& Highway Environment Libraries}{5}{}%
+\contentsline {subsubsection}{Typical Training Pipeline}{5}{}%
+\contentsline {subsubsection}{Highway-Env Environment Initialization}{6}{}%
+\contentsline {section}{\numberline {0.3}Objectives}{7}{}%
+\contentsline {section}{\numberline {0.4}Methodology}{7}{}%
+\contentsline {subsection}{\numberline {0.4.1}Highway Environment}{7}{}%
+\contentsline {subsubsection}{Important Configurations}{7}{}%
+\contentsline {subsubsection}{Road Geometry}{8}{}%
+\contentsline {subsubsection}{Observation Space}{8}{}%
+\contentsline {subsection}{\numberline {0.4.2}MASAC-RL Framework}{9}{}%
+\contentsline {subsubsection}{Reward Function}{10}{}%
+\contentsline {subsubsection}{}{11}{}%
+\contentsline {section}{\numberline {0.5}Results \& Discussion}{11}{}%
+\contentsline {section}{\numberline {0.6}Conclusion}{11}{}%
+\contentsline {subsection}{\numberline {0.6.1}Risk Evaluation Methods}{11}{}%
+\contentsline {section}{\numberline {0.7}Appendix}{11}{}%
+\contentsline {subsubsection}{LC Global Planner}{12}{}%

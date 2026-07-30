@@ -25,6 +25,102 @@ from configs.configs import RLArgs
 # Import for video recording
 
 from gymnasium.wrappers import RecordVideo
+
+import collections
+import json
+import os
+import numpy as np
+from src.env.risk_calculators import PolygonTTCCalculator
+
+class RiskDataFarmer:
+    def __init__(self, history_length=40):
+        # 40 steps = 4 seconds at 10Hz
+        self.history = collections.deque(maxlen=history_length)
+        self.min_ttc_this_ep = float('inf')
+        self.climax_data = None
+        self.climax_history = None
+        
+        os.makedirs("risk_events", exist_ok=True)
+
+    def step_update(self, env_unwrapped):
+        ego = env_unwrapped.ego
+        if ego is None or ego.crashed:
+            return
+
+        # 1. Grab current physical state for the trajectory buffer
+        current_frame = {
+            'ego_x': float(ego.position[0]),
+            'ego_y': float(ego.position[1]),
+            'advs': []
+        }
+
+        # 2. Extract relative data for the K-Means climax snapshot
+        adv_features = []
+        for adv in env_unwrapped.controlled_vehicles:
+            if not adv.crashed:
+                # Trajectory data
+                current_frame['advs'].append({
+                    'x': float(adv.position[0]),
+                    'y': float(adv.position[1])
+                })
+                
+                # K-Means Data: Relative to Ego
+                dist = np.linalg.norm(adv.position - ego.position)
+                adv_features.append({
+                    'dist_to_ego': float(dist),
+                    'rel_x': float(adv.position[0] - ego.position[0]),
+                    'rel_y': float(adv.position[1] - ego.position[1]),
+                    'rel_vx': float(adv.velocity[0] - ego.velocity[0]),
+                    'rel_vy': float(adv.velocity[1] - ego.velocity[1]),
+                    'ttc': PolygonTTCCalculator.compute_ttc(adv, ego)
+                })
+        
+        self.history.append(current_frame)
+
+        # 3. Check for the climax (minimum TTC)
+        if len(adv_features) >= 2:
+            # Sort adversaries by distance to ego
+            adv_features.sort(key=lambda x: x['dist_to_ego'])
+            current_min_ttc = min([f['ttc'] for f in adv_features])
+
+            if current_min_ttc < self.min_ttc_this_ep:
+                self.min_ttc_this_ep = current_min_ttc
+                
+                # Inter-adversary metrics (Adv 1 vs Adv 2)
+                adv1, adv2 = adv_features[0], adv_features[1]
+                inter_adv_dist = np.hypot(adv1['rel_x'] - adv2['rel_x'], adv1['rel_y'] - adv2['rel_y'])
+                inter_adv_vel = np.hypot(adv1['rel_vx'] - adv2['rel_vx'], adv1['rel_vy'] - adv2['rel_vy'])
+
+                # Save the exact K-Means features you requested
+                self.climax_data = {
+                    'adv1_rel_x': adv1['rel_x'],
+                    'adv1_rel_y': adv1['rel_y'],
+                    'adv1_rel_vx': adv1['rel_vx'],
+                    'adv2_rel_x': adv2['rel_x'],
+                    'adv2_rel_y': adv2['rel_y'],
+                    'adv2_rel_vx': adv2['rel_vx'],
+                    'inter_adv_dist': float(inter_adv_dist),
+                    'inter_adv_rel_vel': float(inter_adv_vel),
+                    'ego_abs_vel': float(ego.velocity[0])
+                }
+                # Lock in the trajectory history leading up to this exact moment
+                self.climax_history = list(self.history)
+
+    def on_episode_end(self, episode_id):
+        # Only save if it was an actual high-risk event
+        if self.min_ttc_this_ep < 4.0 and self.climax_data is not None:
+            filename = f"risk_events/ep_{episode_id}_ttc_{self.min_ttc_this_ep:.2f}.json"
+            with open(filename, 'w') as f:
+                json.dump({
+                    'climax_features': self.climax_data,
+                    'trajectories': self.climax_history
+                }, f)
+        
+        # Reset for next episode
+        self.history.clear()
+        self.min_ttc_this_ep = float('inf')
+        self.climax_data = None
+        self.climax_history = None
     
 if __name__ == "__main__":
 
@@ -130,6 +226,8 @@ if __name__ == "__main__":
 
     rb = MultiAgentReplayBuffer(RLargs) # The replay buffer for storing transitions
 
+    farmer = RiskDataFarmer(history_length=40) # For collecting risk event data
+
     # Start training loop
     
     start_time = time.time()
@@ -154,6 +252,7 @@ if __name__ == "__main__":
             # ENV STEP: Take next step in environment using chosen actions
 
             next_flat_obs, reward, done, truncated, info = wrapped_training_env.step(actions)
+            farmer.step_update(wrapped_training_env.unwrapped) # Update the risk data farmer with the current state of the environment
 
             reward_cumulative += reward
             step_counter += 1
@@ -167,6 +266,8 @@ if __name__ == "__main__":
                     writer.add_scalar(f"ave_reward_per_ep/adv_{idx}", average_reward[idx], global_step)
                 reward_cumulative = np.zeros(RLargs.num_agents)
                 step_counter = 0
+
+                farmer.on_episode_end(global_step) # Save risk event data if applicable
 
             
             # STORAGE IN BUFFER: Store all these in the buffer for later training

@@ -1,4 +1,4 @@
-This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  20 JUL 2026 20:25
+This is LuaHBTeX, Version 1.14.0 (TeX Live 2022/dev/Debian)  (format=lualatex 2026.7.15)  26 JUL 2026 22:09
  restricted system commands enabled.
  file:line:error style messages enabled.
 **/home/gabalteza/LaneChangerHOVTester/document/main
@@ -564,10 +564,9 @@ LaTeX Font Info:    Overwriting math alphabet `\mathgt' in version `normal'
 (Font)                  JY3/gt/m/n --> JY3/IPAExGothic(0)/m/n on input line 718.
 LaTeX Font Info:    Overwriting math alphabet `\mathgt' in version `bold'
 (Font)                  JY3/gt/m/n --> JY3/IPAExGothic(0)/m/n on input line 718.
-)
-No file main.aux.
-
+) (./main.aux)
 \openout1 = main.aux
+
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 24.
 LaTeX Font Info:    ... okay on input line 24.
 LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 24.
@@ -578,7 +577,7 @@ LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 24.
 LaTeX Font Info:    ... okay on input line 24.
 LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 24.
 LaTeX Font Info:    Trying loading font information for TS1+cmr on input line 24.
-(/usr/share/texlive/texmf-dist/tex/latex/base/ts1cmr.fd
+ (/usr/share/texlive/texmf-dist/tex/latex/base/ts1cmr.fd
 File: ts1cmr.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
 LaTeX Font Info:    ... okay on input line 24.
@@ -731,12 +730,24 @@ LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/b/n' will be
 (Font)              scaled to size 23.94002pt on input line 84.
 LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/b/n' will be
 (Font)              scaled to size 23.94002pt on input line 84.
-
-No file main.toc.
+ (./main.toc(load cache: extra_lmroman8-regular.luc)(load cache: extra_lmroman6-regular.luc)
+LaTeX Font Info:    Trying loading font information for U+msa on input line 1.
+ (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
+File: umsa.fd 2013/01/14 v3.01 AMS symbols A
+)
+LaTeX Font Info:    Trying loading font information for U+msb on input line 1.
+ (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
+File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+)
+LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
+(Font)              scaled to size 7.69775pt on input line 1.
+LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
+(Font)              scaled to size 5.77332pt on input line 1.
+)
 \tf@toc=\write3
 
 \openout3 = main.toc
-[1
+ [1
 
 ]
 LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/b/n' will be
@@ -760,75 +771,45 @@ LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/b/n' will be
 (Font)              scaled to size 13.85594pt on input line 132.
 LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/b/n' will be
 (Font)              scaled to size 13.85594pt on input line 132.
-(load cache: extra_lmroman8-regular.luc)(load cache: extra_lmroman6-regular.luc)
-LaTeX Font Info:    Trying loading font information for U+msa on input line 138.
- (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
-File: umsa.fd 2013/01/14 v3.01 AMS symbols A
-)
-LaTeX Font Info:    Trying loading font information for U+msb on input line 138.
- (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
-File: umsb.fd 2013/01/14 v3.01 AMS symbols B
-)
-LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 7.69775pt on input line 138.
-LaTeX Font Info:    Font shape `JY3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 5.77332pt on input line 138.
+LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
+(Font)              scaled to size 7.69775pt on input line 159.
+LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
+(Font)              scaled to size 5.77332pt on input line 159.
 
-/home/gabalteza/LaneChangerHOVTester/document/main.tex:181: Misplaced alignment tab character &.
-<argument> Farama Foundation Gymnasium &
-                              Highway Environment Libraries
-l.181 ... Gymnasium & Highway Environment Libraries}
-                                                  
-I can't figure out why you would want to use a tab mark
-here. If you just want an ampersand, the remedy is
-simple: Just type `I\&' now. But if some right brace
-up above has ended a previous alignment prematurely,
-you're probably due for more error messages, and you
-might try typing `S' now just to see what is salvageable.
+Overfull \hbox (116.69394pt too wide) detected at line 166
+[][]
+ []
 
-[3]
 
-LaTeX Warning: Reference `fig:gym_training_pipeline' on page 4 undefined on input line 189.
+Overfull \hbox (40.17387pt too wide) detected at line 187
+[][]
+ []
 
-[4]
-Overfull \hbox (5.25682pt too wide) in paragraph at lines 232--235
+[3] [4]
+
+LaTeX Warning: Reference `fig:gym_training_pipeline' on page 5 undefined on input line 286.
+
+[5] [6]
+Overfull \hbox (5.25682pt too wide) in paragraph at lines 329--332
 []\TU/lmr/m/n/12 To cre-ate a multi-lane high-way en-vi-ron-ment that sim-u-lates a highway-traversing
  []
 
-[5]
+[7]
 
-LaTeX Warning: Reference `fig:highway_env' on page 6 undefined on input line 273.
+LaTeX Warning: Reference `fig:highway_env' on page 8 undefined on input line 370.
 
-[6] [7]
-LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 7.69775pt on input line 351.
-LaTeX Font Info:    Font shape `JT3/IPAExMincho(0)/m/n' will be
-(Font)              scaled to size 5.77332pt on input line 351.
+[8] [9] [10]
 
+LaTeX Warning: Citation `7637091' on page 11 undefined on input line 538.
 
-LaTeX Warning: Citation `7637091' on page 8 undefined on input line 384.
-
-[8]
-Overfull \hbox (11.81291pt too wide) in paragraph at lines 395--396
+[11]
+Overfull \hbox (11.81291pt too wide) in paragraph at lines 549--550
 []\TU/lmr/m/n/12 The four equa-tions rep-re-sent-ing the above nor-mal-ized lane-utility val-ues $\OML/cmm/m/it/12 U[]$\TU/lmr/m/n/12 ,
  []
 
-
-LaTeX Warning: Reference `eq:totalutility' on page 9 undefined on input line 412.
-
-[9]
-
-LaTeX Warning: Reference `eq: desiredlane' on page 10 undefined on input line 421.
-
-
-LaTeX Warning: Reference `eq: gaputility' on page 10 undefined on input line 429.
-
-
-LaTeX Warning: Reference `eq: gaputilityduration' on page 10 undefined on input line 446.
-
-[10] [11]
+[12] [13] [14]
 No file main.bbl.
-[12] (./main.aux)
+[15] (./main.aux)
 
 LaTeX Warning: There were undefined references.
 
@@ -838,19 +819,19 @@ LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
 )
 
 Here is how much of LuaTeX's memory you used:
- 8370 strings out of 477805
- 305785,662416 words of node,token memory allocated
- 32116 words of node memory still in use:
-   11 hlist, 2 vlist, 5 rule, 2 glue, 395 kern, 1 glyph, 10809 attribute, 1363 glue_spec, 562 attribute_list, 1 write, 83 user_defined nodes
-   avail lists: 1:41,2:75430,3:165,4:183,5:198,6:42,7:7550,8:71,9:487,10:26,11:576
+ 8380 strings out of 477805
+ 305787,662416 words of node,token memory allocated
+ 38205 words of node memory still in use:
+   11 hlist, 2 vlist, 5 rule, 2 glue, 443 kern, 1 glyph, 12742 attribute, 1696 glue_spec, 663 attribute_list, 1 write, 112 user_defined nodes
+   avail lists: 1:41,2:74908,3:186,4:434,5:184,6:43,7:7550,8:71,9:739,10:26,11:591
  28642 multiletter control sequences out of 65536+600000
  67 fonts using 54666047 bytes
- 100i,19n,99p,1829b,357s stack positions out of 5000i,500n,10000p,200000b,80000s
-</usr/share/texmf/fonts/opentype/public/lm/lmroman6-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman8-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-bold.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-regular.otf></usr/share/texlive/texmf-dist/fonts/truetype/public/ipaex/ipaexm.ttf></usr/share/texmf/fonts/opentype/public/lm/lmroman17-regular.otf></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (13 pages, 788035 bytes).
+ 100i,19n,99p,1829b,353s stack positions out of 5000i,500n,10000p,200000b,80000s
+</usr/share/texmf/fonts/opentype/public/lm/lmroman6-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman8-regular.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-bold.otf></usr/share/texmf/fonts/opentype/public/lm/lmroman12-regular.otf></usr/share/texlive/texmf-dist/fonts/truetype/public/ipaex/ipaexm.ttf></usr/share/texmf/fonts/opentype/public/lm/lmroman17-regular.otf></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on main.pdf (16 pages, 814298 bytes).
 
-PDF statistics: 133 PDF objects out of 1000 (max. 8388607)
- 84 compressed objects within 1 object stream
+PDF statistics: 146 PDF objects out of 1000 (max. 8388607)
+ 93 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 131072)
  1 words of extra memory for PDF output out of 10000 (max. 100000000)
 

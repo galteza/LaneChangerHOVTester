@@ -773,6 +773,74 @@ class Wrapper_MergeExitLaneHighway_Environment(gym.Wrapper):
         # Step the underlying simulation engine
         _obs, reward, terminated, truncated, info = self.env.step(formatted_actions)
 
+        # ====== farming dangerous moments for k-means clustering ======
+        env = self.env.unwrapped
+        min_ttc = float('inf')
+        climax_snapshot = None
+        
+        victim = env.ego 
+        
+        if victim is not None and not victim.crashed:
+            adv_features = []
+            
+            # 1. Gather stats for all living adversaries
+            for adv in env.controlled_vehicles:
+                if not adv.crashed:
+                    current_ttc = PolygonTTCCalculator.compute_ttc(adv, victim)
+                    dist = np.linalg.norm(adv.position - victim.position)
+                    
+                    adv_features.append({
+                        'ttc': current_ttc,
+                        'dist_to_ego': dist,
+                        'rel_x': adv.position[0] - victim.position[0],
+                        'rel_y': adv.position[1] - victim.position[1],
+                        'rel_vx': adv.velocity[0] - victim.velocity[0],
+                        'rel_vy': adv.velocity[1] - victim.velocity[1],
+                    })
+            
+            # 2. If we have adversaries, find the climax
+            if adv_features:
+                # Sort by distance to ego to identify the primary and secondary attackers
+                adv_features.sort(key=lambda x: x['dist_to_ego'])
+                min_ttc = min(f['ttc'] for f in adv_features)
+                
+                # 3. Build the multi-agent snapshot if risk is high enough
+                if min_ttc < 4.0:
+                    adv1 = adv_features[0]
+                    climax_snapshot = {
+                        'adv1_rel_x': adv1['rel_x'],
+                        'adv1_rel_y': adv1['rel_y'],
+                        'adv1_rel_vx': adv1['rel_vx'],
+                        'adv1_rel_vy': adv1['rel_vy'],
+                        'ego_abs_vel': victim.velocity[0],
+                        'ego_lane_id': victim.lane_index[2] 
+                    }
+                    
+                    # Add the second adversary and the inter-adversary metrics if available
+                    if len(adv_features) >= 2:
+                        adv2 = adv_features[1]
+                        inter_dist = np.hypot(adv1['rel_x'] - adv2['rel_x'], adv1['rel_y'] - adv2['rel_y'])
+                        inter_vel = np.hypot(adv1['rel_vx'] - adv2['rel_vx'], adv1['rel_vy'] - adv2['rel_vy'])
+                        
+                        climax_snapshot.update({
+                            'adv2_rel_x': adv2['rel_x'],
+                            'adv2_rel_y': adv2['rel_y'],
+                            'adv2_rel_vx': adv2['rel_vx'],
+                            'inter_adv_dist': float(inter_dist),
+                            'inter_adv_rel_vel': float(inter_vel)
+                        })
+                    else:
+                        # Fallback if only 1 adversary is alive
+                        climax_snapshot.update({
+                            'adv2_rel_x': 0.0, 'adv2_rel_y': 0.0, 'adv2_rel_vx': 0.0,
+                            'inter_adv_dist': 0.0, 'inter_adv_rel_vel': 0.0
+                        })
+
+        info['min_ttc'] = min_ttc
+        if climax_snapshot is not None:
+            info['kmeans_snapshot'] = climax_snapshot
+        # =====
+
         # Collapse individual vehicle rewards into your global training scalar
         if isinstance(reward, (list, tuple, np.ndarray)):
             collective_reward = float(np.mean(reward))
