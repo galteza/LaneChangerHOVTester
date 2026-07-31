@@ -32,6 +32,16 @@ import os
 import numpy as np
 from src.env.risk_calculators import PolygonTTCCalculator
 
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
+
 class RiskDataFarmer:
     def __init__(self, history_length=40):
         # 40 steps = 4 seconds at 10Hz
@@ -81,7 +91,7 @@ class RiskDataFarmer:
                 json.dump({
                     'climax_features': self.climax_data,
                     'trajectories': self.climax_history
-                }, f)
+                }, f, cls=NpEncoder)
         
         # Reset for next episode
         self.history.clear()

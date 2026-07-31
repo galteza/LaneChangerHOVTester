@@ -90,4 +90,4 @@ def generate_climax_scatter(n_clusters=3):
     plt.show()
 
 if __name__ == "__main__":
-    generate_climax_scatter(n_clusters=17)
+    generate_climax_scatter(n_clusters=15)
