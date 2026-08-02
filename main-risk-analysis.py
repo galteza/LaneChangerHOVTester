@@ -394,29 +394,77 @@ def plot_cluster_spider_plot(df, n_clusters=3):
     plt.close()
     print(f"Saved: {filepath}")
 
-def plot_dtw_trajectory_heatmap(df):
-    """Computes and plots Dynamic Time Warping (DTW) distance heatmap across scenarios."""
-    num_samples = min(20, len(df))
-    sample_df = df.iloc[:num_samples].reset_index(drop=True)
-    dtw_matrix = np.zeros((num_samples, num_samples))
+def plot_behavior_dtw_heatmaps(df):
+    """Computes and plots separate DTW distance heatmaps for specific meta-behavior groups."""
     
-    for i in range(num_samples):
-        for j in range(num_samples):
-            dist1 = calculate_dtw_distance(sample_df.loc[i, 'adv1_traj'], sample_df.loc[j, 'adv1_traj'])
-            dist2 = calculate_dtw_distance(sample_df.loc[i, 'adv2_traj'], sample_df.loc[j, 'adv2_traj'])
-            dtw_matrix[i, j] = dist1 + dist2
+    # Define the meta-behaviors and their corresponding clusters
+    behavior_groups = {
+        # "Cruise_Blocking": [4],# [4, 8, 11],
+        # "Walling": [3,7],#[1, 3, 7],
+        # "Intentional_Fratricide": [9],
+        # "Sandwiching": [6],#[5, 6, 10]
+        "Cruise_Blocking_11": [11],
+        "Cruise_Blocking_4": [4],
+        "Cruise_Blocking_8": [8],
+        "Walling_3": [3],
+        "Walling_1": [1],
+        "Walling_7": [7],
+        "Intentional_Fratricide_9": [9],
+        "Sandwiching_6": [6],
+        "Sandwiching_5": [5],
+        "Sandwiching_10": [10]
+    }
+    
+    for behavior_name, clusters in behavior_groups.items():
+        # Filter the dataframe for the specific clusters in this behavior
+        behavior_df = df[df['cluster'].isin(clusters)].reset_index(drop=True)
+        
+        num_samples = len(behavior_df)
+        if num_samples == 0:
+            print(f"Skipping {behavior_name.replace('_', ' ')}: No valid scenarios found in these clusters.")
+            continue
             
-    plt.figure(figsize=(10, 8))
-    im = plt.imshow(dtw_matrix, cmap='viridis', origin='upper')
-    plt.colorbar(im, label='DTW Trajectory Distance')
-    plt.title("DTW Trajectory Diversity Matrix", fontweight='bold')
-    plt.xlabel("Scenario Index")
-    plt.ylabel("Scenario Index")
-    
-    filepath = os.path.join(OUTPUT_DIR, "dtw_heatmap.png")
-    plt.savefig(filepath, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved: {filepath}")
+        # Cap the number of samples to prevent extremely long computation times
+        num_samples = min(30, num_samples)
+        sample_df = behavior_df.iloc[:num_samples]
+        
+        dtw_matrix = np.zeros((num_samples, num_samples))
+
+        
+        
+        print(f"Calculating DTW for {behavior_name.replace('_', ' ')} (n={num_samples})...")
+        for i in range(num_samples):
+            for j in range(num_samples):
+                dist1 = calculate_dtw_distance(sample_df.loc[i, 'adv1_traj'], sample_df.loc[j, 'adv1_traj'])
+                dist2 = calculate_dtw_distance(sample_df.loc[i, 'adv2_traj'], sample_df.loc[j, 'adv2_traj'])
+                dtw_matrix[i, j] = dist1 + dist2
+
+        # Extract the upper triangle of the matrix, excluding the diagonal (k=1)
+        upper_triangle_indices = np.triu_indices_from(dtw_matrix, k=1)
+        pairwise_distances = dtw_matrix[upper_triangle_indices]
+        
+        if len(pairwise_distances) > 0:
+            mean_dtw = np.mean(pairwise_distances)
+            std_dtw = np.std(pairwise_distances)
+            max_dtw = np.max(pairwise_distances)
+            
+            print(f"--- Diversity Metrics for {behavior_name} ---")
+            print(f"Mean Pairwise DTW: {mean_dtw:.2f}")
+            print(f"Std Dev of DTW:    {std_dtw:.2f}")
+            print(f"Max DTW Distance:  {max_dtw:.2f}\n")
+                
+        # Generate and save the heatmap
+        plt.figure(figsize=(10, 8))
+        im = plt.imshow(dtw_matrix, cmap='viridis', origin='upper')
+        plt.colorbar(im, label='DTW Trajectory Distance')
+        plt.title(f"Intra-Class Diversity: {behavior_name.replace('_', ' ')}", fontweight='bold')
+        plt.xlabel("Scenario Index")
+        plt.ylabel("Scenario Index")
+        
+        filepath = os.path.join(OUTPUT_DIR, f"dtw_heatmap_{behavior_name.lower()}.png")
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved: {filepath}")
 
 def plot_statistical_bar_charts(df, n_clusters=3):
     """Plots comparative bar charts for TIT, MDRAC, Jerk, and Rewards per cluster."""
@@ -509,19 +557,11 @@ if __name__ == "__main__":
     original_count = len(df)
 
     # Keep only the rows where 'max_acc' is physically plausible (under 10 m/s^2)
-    df = df[df['max_acc'] <= 10.0].copy() 
+    #df = df[df['max_acc'] <= 10.0].copy() 
     
     filtered_count = len(df)
     print(f"\n[Physics Filter Applied] Removed {original_count - filtered_count} physically impossible scenarios (Acceleration > 10.0 m/s²).")
     
-    # # Keep only the rows where 'max_jerk' is strictly less than 5.0
-    # df = df[df['max_jerk'] < 5.0].copy() 
-    
-    # filtered_count = len(df)
-    # print(f"\n[Physics Filter Applied] Removed {original_count - filtered_count} physically impossible scenarios (Jerk >= 5.0 m/s³).")
-    # print(f"Remaining plausible scenarios for analysis: {filtered_count}")
-    # ----------------------
-
     # 2. Run K-Means and ANOVA / Tukey Tests
     N_CLUSTERS = 12
     
@@ -536,7 +576,10 @@ if __name__ == "__main__":
         print("\nGenerating slide-ready figures...")
         plot_climax_scatter(df, n_clusters=N_CLUSTERS)
         plot_cluster_spider_plot(df, n_clusters=N_CLUSTERS)
-        plot_dtw_trajectory_heatmap(df)
+        
+        # Call the newly created behavior-specific DTW mapping function
+        plot_behavior_dtw_heatmaps(df) 
+        
         plot_statistical_bar_charts(df, n_clusters=N_CLUSTERS)
         
         print(f"\nAll analyses complete! Check the '{OUTPUT_DIR}' directory for figures.")
