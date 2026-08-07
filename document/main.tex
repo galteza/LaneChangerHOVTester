@@ -7,9 +7,9 @@
 \usepackage{amssymb}
 \usepackage{luatexja}
 \usepackage[ipaex]{luatexja-preset} % Adds standard Japanese fonts
+\usepackage{booktabs} % For professional looking tables
 
-\graphicspath{{figures/}{assets/}} % Set the path for images
-
+\graphicspath{{figures/}{assets/}{analysis/}{reward_plots}} % Set the path for images
 
 \geometry{top=3cm,bottom=3cm,left=3cm,right=3cm}
 
@@ -85,49 +85,432 @@
 \newpage
 
 
-\section{Abstract}
-
-The lane-changing task is notoriously one of the more difficult to generate dynamic, risk-critical testing scenarios due to its
-
-No known industry standard on lane
-
-
-
 \section{Introduction}
 
-The deployment of autonomous driving technologies into society has been one of the most delayed advancements to the 
-field of autonomous vehicles, especially dealing with human pushback \cite{suzuki2025safety}. As such, researchers 
-and scientists have been working towards developing various methods to test the safety and robustness of autonomous 
-driving (AD) tasks on the road.
+\subsection{Autonomous Vehicle Safety Testing}
 
-One of the least-explored AD task in terms of safety testing is the lane-changing or lane-intrusion AD task in which 
-the vehicle tries to insert itself within a specific gap. Past papers have employed both static methods of evaluating 
-the ability of a vehicle's lane changing, especially with regard to global standards, such as the ISO. However, there 
-remains a huge gap in the available research on dynamic methods wherein obstacles are moving or actively working against 
-the system under test (SUT). As such, this research aims to create a safety verification system for the lane-changing or 
-lane-intrusion task into the gap of a leading-following pair of vehicles. Moreover, this research will test the lane-changing 
-logic's ability to withstand multiple lane changes, coming in from a merging ramp and traversing the highway to reach 
-the preset desired exit ramp situated on the other edge of the highway.
+The commercial deployment of autonomous driving (AD) technologies has been a delayed advancement in the field of autonomous vehicles due to the overall public perception of the uncertainty of their technologies. To combat the societal pushback and issues stemming from a lack of public trust in such innovations, it is necessary to aptly test, prove, quantify and communicate vehicle safety, algorithm robustness, and driver-passenger comfort in autonomous driving tasks.
 
-Reinforcement learning, more broadly, machine learning, has been a hot area of research for its efficacy as a research 
-methodology tool in solving problems that are not easily solvable through traditional white-box means. 
-Reinforcement learning, which uses a neural network to learn from repeated simulations within a set environment, learns 
-from its mistakes and successes in order to develop a policy that grows stronger and eventually converges to a robust 
-neural network for the decision-making of an appropriate action to take within the environment under test.
+In the typical pipeline of AD testing on the road to deployment, there exist three main testing stages: (1) virtual-based testing, (2) closed-field testing, and (3) on-road testing, with virtual-based testing being relied heavily upon prior to real-world testing, as real-world testing presents challenges to cost, general resources, and long training cycles.
 
-In the field of autonomous driving safety testing, one of the most important parts to research on is the coverage of 
-the tests, namely how diverse the testing scenarios generated are from one another in order to ensure that a wider scope 
-of possible situations are covered. Moreover, rare cases in which risk of crashing is high are difficult to quantify and 
-hard-code manually, while they remain to be the most important to be covered in the overall scope, especially since they 
-are directly linked to human comfortability and safety on the road when the vehicles employing such are eventually deployed on the road.
+A longstanding area of research, virtual-based testing has been explored across a wide range of software and functionalities, ranging from using simulations of the real-world data collected in the past to automatically making hypothetical test cases in online simulators. One of the gaps in this field is largely present in ensuring the coverage of the testable space in scenario generation methods.
 
-Hence, this study aims to use specifically a multi-agent soft-actor-critic reinforcement learning framework to control 
-a platoon of moving vehicles and let them learn how to get themselves as close as possible to inducing high risk of crash 
-within the SUT without actually letting it crash. Moreover, the soft-actor-critic portion of this framework aims to maximize 
-the entropy of the discovery of appropriate actions. Rather than outputting one proven action that works, the policy outputs 
-a probability mapping of various non-clusterable actions that all efficiently maximize risk of crash in the SUT. In such way, 
-the coverage of test-case generation is hypothetically increased, and may be evaluated against previous baseline methods for 
-its strength in generating high-risk edge cases for lane-changing and lane-intrusion scenarios on a highway.
+Novel methods of using machine learning and large language models have been at the forefront of innovations within the field of virtual-based testing. Large language models are being used to train a policy to output human-like maneuvers and have successfully shown to do so []. Machine learning methods are also being used to cluster and extrapolate past traffic data (inclusive of high-risk and near-crash situations) to make hypothetical situations for testing in-sim.
+
+The lane-changing and lane-merging autonomous driving task is one of the most notoriously known to be complex to model and ensure robustness due to the considerably larger dimensional feature space governing its execution, especially in comparison to simpler one-dimensional AD tasks such as cruise control. As such, extensive research is currently being carried out in strengthening their robustness on the road. As of current, static lane-changing testing has been officially approved by global standards, such as the ISO; however, dynamic testing remains a field unanswered and under study.
+
+\subsection{Reinforcement Learning}
+
+Reinforcement learning (RL) is a machine learning method that trains its neural networks and policies on maximizing a provided reward function. The reward function is designed with the goal of quantifying desirable and undesirable actions within a target environment. This field of reinforcement learning is one currently being explored for its breadth of application. It is extensively used in autonomous driving research, both as a standalone method from perception to planning to control and as a tool used in conjunction with classical control, with a known combination being the use of reinforcement learning as a high-level controller and classical control as a low-level controller.
+
+\subsubsection{Multi-Agent Reinforcement Learning}
+
+RL, having a repertoire spanning decades of research, has been extended not just to the control of one agent but to multiple agents inhabiting the same environment. Research on multi-agent RL is extensive, being a subgroup of reinforcement learning that in itself also has a wide range of applications and execution methods.
+
+Multi-agent RL may be used in cases with agents of differing homogeneity, objectives, and training methods. Specifically in training vehicle platoons for cooperative maneuver, vehicles are typically treated as a homogeneous entity across the platoon, mainly for simplicity and speed of neural network integration. Whereas for vehicles undergoing non-cooperative zero-sum games, they are usually each treated with a different set of reward functions and separate actor and critic networks.
+
+Due to this, one drawback in the implementation of multi-agent RL is its proneness to the issue of non-stationarity, i.e., having an environment that is non-Markovian due to all agents acting individually based on a changing policy.
+
+In the case of cooperative vehicle platoon, they undergo the philosophy of centralized training and decentralized execution, indicating that while each agent in the environment accounts solely for its own actions, their brain and understanding of the environment is shared with the others; they are aware of the perception and actions of the other agents in addition to theirs, thereby allowing them to make actions based platoon and hivemind-like targets and not just its own.
+
+\subsubsection{Soft Actor-Critic Reinforcement Learning}
+
+Most RL frameworks are equipped with two main network types: (1) the actor, and (2) the critic. 
+
+The actor is in charge of receiving the observation states from the environment and outputting the best next actions for the agent to take. On the other hand, the critic is in charge of receiving the observation states and the next action, evaluating their pairing, and outputting a Q critic score that quantifies the value of the environment at the instant of the provided observation states and next actions.
+
+Soft actor-critic aims to maximize the entropy of exploration during training of the policy prior to convergence by introducing three unique features:
+
+Introducing a temperature parameter that artificially spikes the entropy when exploration scope gets too small
+By using probabilistic decision-making in the actor networks, outputting mean and standard deviation that represent a normal distribution
+Utilizing a memory buffer that accounts for previously saved data
+
+The training of both the actor and critic networks follows the pipeline displayed in Figure __. During each training step, a large batch of samples (including the observation, action, reward, and next observation) is procured, and the pipeline is run for each sample.
+
+First, the next action is taken by running the next observation through the current actor network. Then, the critic network evaluates this next observation-next action pairing to find a Q score, which is then consolidated with the obtained reward using the Bellman equation, as seen in Equation __. From here, the true target value is obtained.
+
+
+The critic network is also used to obtain a Q score for the observation-action pairing, and the resulting value is combined with the true target value to get a TD error, which may be calculated as seen in Equation __.
+
+
+From this, the minimum squared-error (MSE) loss function is calculated, and the obtained error is plugged into the gradient ascent equation and backpropagation for the critic network.
+
+The current observation and action are then run through the newly updated critic network to find a Q score, which is utilized in calculating loss and gradient ascent for the actor network, as seen in Equation __.
+
+The cycle repeats for however many samples were taken for that training step.
+
+\section{Proposed Methodology}
+
+This study aims to utilize a multi-agent soft-actor critic reinforcement learning framework in training an adversarial platoon to bully a target vehicle on a highway, as a proof of concept for RL-induced environments as a data generation tool, which, in this case, is for edge cases in AD testing.
+
+The objective of the aforementioned method is to evaluate whether a platoon of multiple vehicles designed to create near-crash scenarios with the target vehicle (hereafter referred to as the ego) will be an effective method in generating test cases that quantify the limits of new autonomous driving technologies.
+
+\section{Definition of the Problem}
+
+In a highway environment consisting of a merging lane, a cruising lane, and an exit lane, as shown in the schematic in Figure {}, an ego vehicle equipped with a baseline Intelligent Driver Model (IDM) and Minimizing Overall Braking Induced by Lane changes (MOBIL) lane-changing (LC) model is tasked to sequentially merge into the cruising lane, cruise, and then finally exit onto the exit lane.
+
+At the same time, two adversarial vehicles are instantiated and placed at arbitrary starting longitudinal positions at the beginning of the cruising lane. These two adversaries are equipped with MASAC-RL and are tasked to induce near-crash situations in the lane-changing model as it is traversing the highway, all while ensuring that the lane-changer is able to successfully exit the highway cruising lane.
+
+\section{Premature Non-Convergence}
+
+The action policy of MASAC-RL starts with randomized decision-making and progressively converges to a policy that maximizes the reward received from the environment. However, due to its entropy-maximizing feature, rather than relying on the converged policy to be able to output scenarios that present high risk upon its deployment, the training of the policy was made to be the source of the test-case farming. Average rewards per episode were seen to spike prior to convergence due to the discovery of local maxima before converging to a lower average reward value.
+
+\section{Farama Foundation Gymnasium \& Highway Environment Libraries}
+
+The Farama Foundation has been a long-time provider of extensive libraries for reinforcement learning research and simulations. The Highway-Env library \cite{highway-env} is a library that is built off of the Gymnasium library, which is a library that provides a framework for creating customizable environments, as well as premade environments, such as the double pendulum and the cart-pole.
+
+\subsection{Kinematic Bicycle Model}
+
+All vehicles within the Highway-Env library utilized the kinematic bicycle model (KBM) \cite{polack2017kinematic}, governed by the state-space representation in Equation \ref{eq:kbm}.
+
+\begin{equation}
+    \begin{bmatrix}
+        x_{t+1} \\
+        y_{t+1} \\
+        \theta_{t+1} \\
+        v_{t+1} \\
+        \gamma_{t+1} \\
+    \end{bmatrix} =
+    \begin{bmatrix}
+        x_t + \Delta tv_t\cos{\theta_{t}} \\
+        y_t + \Delta tv_t\sin{\theta_{t}} \\
+        \theta_t + \Delta t\frac{v_t}{L_b}\tan(\gamma_t) \\
+        v_t + \Delta ta_t\ \\
+        \gamma_t + \Delta t \omega_t
+    \end{bmatrix}
+    \label{eq:kbm}
+\end{equation}
+
+
+The vehicles are all controlled using two controllers, one handling longitudinal control and one handling lateral control. The longitudinal controller is a baseline proportional controller \cite{highway-env}, as seen in Equation \ref{eq:longitudinal_controller}. 
+
+\begin{equation}
+    a = K_p(v_{\text{ref}} - v)
+    \label{eq:longitudinal_controller}
+\end{equation}
+where
+\begin{list}{-}{spacing}
+    \item $a$ is the acceleration (throttle),
+    \item $v$ is the current velocity,
+    \item $K_p$ is the proportional gain,
+    \item $v_{\text{ref}}$ is the reference velocity.
+\end{list}
+
+For the lateral controller, a proportional-derivative controller is used \cite{highway-env}, as seen in Equations \ref{eq:lateral_position_controller} and \ref{eq:lateral_heading_controller}.
+
+\begin{equation}
+    v_{\mathrm{lat, r}} = -K_{\mathrm{p, lat}}\Delta_{\mathrm{lat}}
+    \label{eq:lateral_position_controller}
+\end{equation}
+
+\begin{equation}
+    \dot{\psi}_r = K_{p, \psi}(\psi_r - \psi)
+    \label{eq:lateral_heading_controller}
+\end{equation}
+
+where
+
+\begin{list}{-}{spacing}
+    \item $K_{\mathrm{p, lat}}$ is the proportional gain for lateral position,
+    \item $K_{p, \psi}$ is the proportional gain for heading angle,
+    \item $v_{\mathrm{lat, r}}$ is the lateral velocity command,
+    \item $\Delta_{\mathrm{lat}}$ is the lateral distance from the lane centerline,
+    \item $\psi_r = \psi_L + \Delta\psi_r$ is the reference heading angle,
+    \item $\psi_L$ is the lane heading (at some look-ahead position to anticipate turns),
+    \item $\Delta\psi_r = \arcsin\frac{v_{\mathrm{lat, r}}}{v}$ is the heading angle error,
+    \item $\psi$ is the current heading angle.
+\end{list}
+
+The final steering angle is calculated to be shown in Equation \ref{eq:steering_angle}.
+
+\begin{equation}
+    \delta = \arcsin\frac{l_r\dot{\psi}_r}{2v},
+    \label{eq:steering_angle}
+\end{equation} 
+
+where $l_r$ is the distance from the rear axle to the center of mass of the vehicle.
+
+\subsection{IDM \& MOBIL}
+
+The Highway-Env library provides ready-made IDM & MOBIL models for the driving of vehicles, and the ego lane-changing vehicle was configured with the parameters as seen in Table ??.
+
+IDM is 
+
+\subsection{Raw Observation Space}
+
+The raw observation matrix was configured to pass a multi-agent observation matrix at every step, and every controlled vehicle represented in this matrix contains observations of the features shown in Table \ref{tab:raw_feature_space}.
+\begin{table}[htbp]
+    \centering
+    \caption{Raw observation space in Highway-Env. Taken from Highway-Env documentation. \cite{highway-env}}
+    \label{tab:raw_feature_space}
+    \renewcommand{\arraystretch}{1.2} % Gives the rows a comfortable breathing room
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Feature} & \textbf{Description} & \textbf{Value} \\
+        \midrule
+        Presence    &  Whether the vehicle is on screen or not & 0 for not present, 1 for present \\
+        x           &  Absolute longitudinal distance of the vehicle from the start of the highway & Measured in meters \\
+        y           &  Absolute lateral distance of the vehicle from the left boundary of the highway & Measured in meters \\
+        vx          &  Longitudinal speed of the vehicle & Measured in meters per second \\
+        vy          &  Lateral speed of the vehicle & Measured in meters per second \\
+        Heading     &  Heading angle of the vehicle & Measured in radians \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Each vehicle also holds observations of the same features of the other vehicles in the environment, each set of observations being arranged in its self-matrix in order of proximity. The raw observation matrix for two controlled vehicles is sized to be a 2x2x6 matrix.
+
+\subsection{Designing New Observation Space for MASAC-RL}
+
+The raw observation space was modified to remove redundancies and maximize compactness and relevance of information. Table \ref{tab:masac_feature_space} shows the new observation space for MASAC-RL.
+
+\begin{table}[htbp]
+    \centering
+    \caption{MASAC-RL observation space}
+    \label{tab:masac_feature_space}
+    \renewcommand{\arraystretch}{1.2} % Gives the rows a comfortable
+    \begin{tabular}{lccc}
+        \toprule
+        \midrule
+        Self Observation \\
+        \midrule
+        \textbf{Feature} & \textbf{Description} & \textbf{Value} \\
+        \textbf{Activity Status} &  Whether the vehicle is crashed or not & 0 for not crashed, 1 for crashed \\
+        \textbf{Lateral Distance from Left Boundary} &  Lateral distance of the vehicle from the left boundary of the highway, normalized to the highway width & 0~1 \\
+        \textbf{Lateral Distance from Right Boundary} &  Lateral distance of the vehicle from the right boundary of the highway, normalized to the highway width & 0~1 \\
+        \textbf{Relative Longitudinal Distance from Ego LC} &  Relative longitudinal distance of the vehicle from the ego lane-changing vehicle, normalized to the highway length & -1~1 \\
+        \textbf{Relative Lateral Distance from Ego LC} &  Relative lateral distance of the vehicle from the ego lane-changing vehicle, normalized to the highway width & -1~1 \\
+        \textbf{Longitudinal Speed} &  Longitudinal speed of the vehicle, normalized to maximum allowable speed & 0~1 \\
+        \textbf{Lateral Speed} &  Lateral speed of the vehicle, normalized to $\frac{1}{\sqrt{2}}$ of the maximum allowable speed & 0~1 \\
+        \midrule
+        Ego LC Observation \\
+        \midrule
+        \textbf{Feature} & \textbf{Description} & \textbf{Value} \\
+        \textbf{Longitudinal Distance from Exit Ramp} &  Longitudinal distance of the ego lane-changing vehicle from the exit ramp, normalized to the highway length & 0~1 \\
+        \textbf{Lateral Distance from Exit Ramp} &  Lateral distance of the ego lane-changing vehicle from the exit ramp, normalized to the highway width & 0~1 \\
+        \textbf{Relative Longitudinal Speed} &  Relative longitudinal speed of the ego lane-changing vehicle, normalized to twice the maximum allowable speed & -1~1 \\
+        \textbf{Relative Lateral Speed} &  Relative lateral speed of the ego lane-changing vehicle, normalized to $\frac{2}{\sqrt{2}}$ the maximum allowable speed & -1~1 \\
+        \textbf{1/($\mathrm{2D TTC} + 1$)} &  Inverse of the two-dimensional time-to-collision (TTC) with the main adversary vehicle & 0~1 \\
+        \midrule
+        Other-Adversary Observation \\
+        \midrule
+        \textbf{Feature} & \textbf{Description} & \textbf{Value} \\
+        \textbf{Relative Longitudinal Distance from Main Adversary} &  Relative longitudinal distance of the vehicle from the main adversary vehicle, normalized to the highway length & -1~1 \\
+        \textbf{Relative Lateral Distance from Main Adversary} &  Relative lateral distance of the vehicle from the main adversary vehicle, normalized to the highway width & -1~1 \\
+        \textbf{Relative Longitudinal Speed from Main Adversary} &  Relative longitudinal speed of the vehicle from the main adversary vehicle, normalized to twice the maximum allowable speed & -1~1 \\
+        \textbf{Relative Lateral Speed from Main Adversary} &  Relative lateral speed of the vehicle from the main adversary vehicle, normalized to $\frac{2}{\sqrt{2}}$ the maximum allowable speed & -1~1 \\
+        \textbf{1/($\mathrm{2D TTC} + 1$)} &  Inverse of the two-dimensional time-to-collision (TTC) with the main adversary vehicle & 0~1 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Calculation of 2D TTC}
+
+The calculation of the two-dimensional time-to-collision (TTC) values between two vehicles were modeled from the work of Yiru Jiao \cite{jiao2023ttc}, characterized by its computational lightness in comparison to other algorithms with more extrapolative techniques and trajectory-dependent methods calculating for TTC.
+
+The relative distance and relative velocity of both vehicles are taken and calculated for intersection. If the dot product of both vectors is 0, the TTC is calculated. If no intersection is found, the algorithm returns infinity.
+
+\begin{equation}
+    \mathrm{TTC} = \frac{\mathrm{DTC}}{\sqrt{v_{\text{rel}}^2 + \epsilon}}
+\end{equation}
+where
+\begin{align}
+    \mathrm{DTC} & \text{ is the minimum distance between the bounding boxes of vehicles along direction of relative velocity} \\
+    v_{\text{rel}} & \text{ is the relative velocity between the two vehicles} \\
+    \epsilon & \text{ is a small constant to avoid division by zero}
+\end{align}
+
+\section{Contributions: The Platoon Rulebook}
+
+In the formulation of the RL reward function, the proponents developed a list of ground rules by which the platoon vehicles must adhere. This set of rules, hereafter referred to as “The Platoon Rulebook,” is composed of five overarching clauses.
+
+\begin{enumerate}
+    \item The adversary must NOT crash itself.
+    \item The adversary must KEEP OFF lane and highway BOUNDARIES.
+    \item NO REVERSING on the highway.
+    \item The adversary must BE MINDFUL of other adversaries’ safety.
+    \item The adversary must BULLY the ego WITHOUT crashing.
+    \begin{enumerate}
+        \item The adversary must be as CLOSE TO THE EGO as much as possible.
+        \item The adversary must MINIMIZE TTC and THW.
+        \item The adversary must try to MATCH THE EGO SPEED.
+        \item The adversaries must work together to perform a PLATOONING MANEUVER.
+        \item The adversaries must yield to LET THE EGO EXIT.
+    \end{enumerate}
+\end{enumerate}
+
+The specific equations utilized to model the reward patterns for the above rules, as well as the parameters  and coefficients for the aforementioned reward functions, were chosen at the discretion of the researcher and may be modified as future extensions of this work.
+
+\subsection{Rule 1: No Crashing!}
+
+The Rule 1 reward function, as seen in Equation ??, was modeled after an exponential decay function that gives an adversary with a huge penalty upon crash and continues to provide a penalty decaying in value as the number of steps since the crash increases, signaling to the adversary its missed opportunity in continuing to put the ego at risk and the disadvantage of maintaining a 0 state for its platoon activity reading.
+
+\subsection{Rule 2: Keep Lane!}
+
+The Rule 2 reward function, displayed in Equation ??, was modeled after a cosine function that peaks at no penalty when the vehicle is in the middle of a lane and increases in penalty as it nears lane boundaries.
+
+\subsection{Rule 3: No Reversing!}
+
+The Rule 3 reward function, as seen in Equation ??, is a simple one-time penalty function that activates once the longitudinal velocity of the adversary is detected to be negative.
+
+\subsection{Rule 4: Be Mindful!}
+
+The Rule 4 reward function, displayed in Equation ??, is a function based on adversary-to-adversary TTC, modeled with a difference-of-sigmoids shape that provides the adversaries engaging in low TTC (less than around 4 seconds) with another adversary a penalty, with the reward peaking at a positive reward at around 5 seconds to indirectly increase adversary proximity, and finally falling asymptotically to 0 as TTC goes to infinity.
+
+\subsection{Rule 5a: Ego Proximity!}
+
+The Rule 5a reward function, as seen in Equation ??, is modeled after a double-sigmoid function that rewards adversaries according to their relative distance to the ego, whether they are within risk-conducive range (positive reward), safe range (slightly positive reward), non-risk-conducive range (negative reward), the bounds of which were tuned by the proponent.
+
+\subsection{Rule 5b: Maximize Risk!}
+
+The Rule 5b reward functions are modeled after widely regarded risk metrics TTC, as previously discussed, and time headway (THW), which is defined as an ego vehicle’s time to collision to a target without accounting for the target’s speed. This 2D definition of THW was extended in the same way as that of the TTC, previously discussed.
+
+\subsubsection{Ego TTC Reward Function}
+
+The ego-TTC reward function is similarly modeled by a difference-of-sigmoids shape that provides the adversaries engaging in low TTC with the ego vehicle corresponding rewards. A TTC of less than 1 second incurs a negative reward due to the imminence of a non-recoverable crash, whereas a TTC of within 1 to 4 seconds is incentivized with a positive reward with the peak at around 2 seconds. The reward then goes to 0 as TTC goes to infinity.
+
+\subsubsection{Ego THW Reward Function}
+
+The THW reward function was modeled using an exponential decay function that provides the highest possible reward when time headway is near zero.
+
+These two reward functions aim to teach the network the importance of balance between long-term risk (TTC) and immediate risk (THW).
+
+\subsection{Rule 5c: Speed Matching}
+
+The Rule 5c reward function, as can be seen in Equation ??, is modeled after an exponential decay function with the reward starting at its highest and positive at a relative speed of zero, but progressively decreasing until a negative reward the higher the relative speed becomes.
+
+\subsection{Rule 5d: Platooning}
+
+The Rule 5d reward functions for platooning are split into three parts: (1) proximity reward, (2) swarming reward, and (3) sandwiching reward.
+
+For proximity reward, an ellipse bounding the ego vehicle was established according to the ego’s current speed, and every adversary that enters this aforementioned ellipse receives a reward, with the nearer resulting in a higher reward.
+
+For the swarming reward, the adversaries currently within the ellipse are provided an additional reward for every adversary that enters, the reward itself modeled by an exponential function.
+
+Lastly, for the sandwiching reward, adversaries that are involved in the sandwiching of the ego vehicle (front-back placement) are provided with an additional reward.
+
+\subsection{Rule 5e: Yielding}
+
+The Rule 5e reward function of yielding is composed of a simple one-time penalty function, penalizing all adversaries for an ego crash and rewarding for the ego reaching the exit. The ego may be assumed to be safe from risk in the absence of adversaries due to its utilization of proven baseline IDM and MOBIL models.
+
+\subsection{Maximum Reward}
+
+The above-discussed reward functions were run through a Differential Evolution Optimization algorithm to check the maximum possible reward and the vehicle configuration that leads to the aforementioned maximum reward. Table \ref{tab:reward_breakdown} displays the breakdown for the maximum reward obtainable with the chosen reward functions.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Breakdown of reward functions across adversaries for maximum reward}
+    \label{tab:reward_breakdown}
+    \renewcommand{\arraystretch}{1.2} % Gives the rows a comfortable breathing room
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Reward Function} & \textbf{Adversary 1} & \textbf{Adversary 2} & \textbf{Total Reward} \\
+        \midrule
+        2. Keep lane         & -0.123 & -0.129 & -0.252 \\
+        4. Adv-adv TTC       &  0.108 &  0.108 &  0.216 \\
+        5a. Distance to ego  &  0.337 &  0.346 &  0.683 \\
+        5b. Low adv-ego TTC  &  2.188 &  2.195 &  4.383 \\
+        5b. Low THW          &  0     &  0     &  0     \\
+        5c. Speed matching   &  0.383 &  0.389 &  0.772 \\
+        5d. Platooning       &  2.194 &  2.207 &  4.401 \\
+        \midrule
+        \textbf{Total Reward} & \textbf{5.087} & \textbf{5.116} & \textbf{10.203} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Highway placement for maximum reward}
+    \label{tab:vehicle_telemetry}
+    \renewcommand{\arraystretch}{1.2} % Provides professional row spacing
+    \begin{tabular}{l c c c}
+        \toprule
+        \textbf{Vehicle} & \textbf{x} [m] & \textbf{y} [m] & \textbf{speed} [m/s] \\
+        \midrule
+        Ego Vehicle &  0.00 & 2.00 & 25.00 \\
+        Adversary 1 &  6.24 & 2.98 & 24.44 \\
+        Adversary 2 & -5.75 & 2.95 & 25.35 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Results & Discussions}
+
+The MASAC-RL was trained in the created highway environment, and the exact high-risk moments that led to adversary-ego TTC of less than four seconds were isolated for maneuver classification. For each high-risk moment, trajectory plots spanning four seconds leading up to the high-risk moment were also procured and saved.
+
+The following features were lifted from the observations:
+
+\begin{enumerate}
+    \item Relative longitudinal distance with ego
+    \item Relative longitudinal speed with ego
+    \item Inter-adversary distance
+    \item Boolean for currently being in a sandwiching maneuver
+    \item Boolean for currently having one adversary crashed or not
+\end{enumerate}
+
+The high-risk moments were then run through a K-means clustering algorithm with a total of 11 clusters for grouping according to broad adversarial behaviours. The 11 clusters are seen in Figure ??.
+
+Discarding clusters with relatively fewer data points upon presumption of outlier activity, Clusters _ and _, four broad classifications of high-risk maneuvers were found to have emerged from the clustering, with each containing clusters that hold similar adversary positioning.
+
+These behaviors were identified to be the following:
+\begin{enumerate}
+    \item Cruise blocking, which is risk coming from one adversary in front
+    \item Merge blocking, which is risk coming from the creation of a wall in the next lane preventing a safe merge in the ego lane-changer
+    \item Intentional fratricide, which is risk coming from the crashing of the adversaries in front
+    \item Sandwiching, which is risk coming from the combined front positioning and back positioning of two vehicles
+\end{enumerate}
+
+\subsection{Inter-cluster Analysis}
+Clusters within each behavioral group were evaluated against each other for analysis of cross-cluster diversity based on the following metrics:
+\begin{enumerate}
+    \item Time-integrated TTC (TIT), quantifying ego exposure to risk over time
+    \item Maximum deceleration required to avoid collision (MDRAC), quantifying the severity of needed panic-brake in the ego to avoid a crash
+    \item Inter-adversary distance
+    \item Maximum jerk in adversaries
+\end{enumerate}
+
+The TIT is calculated as seen in Equation _. The higher the value, either the higher the duration of the risk exposure or the higher the severity of the imposed risk.
+
+As for the MDRAC, calculated as in Equation _, the higher the value, the more dangerous a situation is.
+
+The maximum jerk is calculated to be the change in adversarial acceleration over time.
+
+ANOVA and Tukey’s HSD Post-hoc testing were utilized in quantifying the differences and comparabilities of the clusters against each other using the above-discussed metrics. The null hypothesis was set to be p < 0.05, with rejection of this hypothesis indicating true difference and non-rejection indicating comparability.
+
+Please refer to Appendix A for the full matrix of ANOVA testing and Tukey’s HSD Post-hoc.
+
+\subsection{Cruise Blocking}
+
+All pairs of clusters in cruise blocking were found to have comparable MDRAC. 
+
+The 
+
+\subsection{Merge Blocking}
+
+\subsection{Intentional Fratricide}
+
+\subsection{Sandwiching}
+
+\subsection{Intra-cluster Analysis}
+
+Each cluster had their data and their trajectories leading up to the high-risk moment warped pairwise for matching using dynamic time warping. A positive score is given for pairs where the difference is affirmative, with the higher the value of this score, hereafter called the distance, indicating a bigger difference.
+
+Applying this pairwise dynamic time warping to all trajectories, the resulting distances were averaged and represented as a normal distribution with both a mean value and standard deviation for visualization of the spread of the distances. The wider the spread of the distances, the more varied the dataset is for the target cluster.
+
+Table ?? displays the resulting mean values and 
+
+All clusters exhibited 
+
+The pairwise distances of the trajectories between 
+
+Table __ displays the resulting mean zxc
+
+\section{Conclusion}
+
+The use of multiple highway lanes may be further explored whether such rulebook remains effective in the creation of environment-specific 
+
+
 
 \subsection{Lane Changing Models}
 \subsubsection{Kinematic Bicycle Model}
@@ -155,15 +538,7 @@ be considered are as follows.
 \subsubsection{2D TTC}
 
 The 2D Time-to-Collision (TTC) is a metric used to evaluate the risk of collision between two vehicles in both longitudinal and lateral directions. It is defined as:
-\begin{equation}
-    TTC = \frac{DTC}{\sqrt{v_{\text{rel}}^2 + \epsilon}}
-\end{equation}
-where
-\begin{align}
-    DTC & \text{ is the minimum distance between the bounding boxes of vehicles along direction of relative velocity} \\
-    v_{\text{rel}} & \text{ is the relative velocity between the two vehicles} \\
-    \epsilon & \text{ is a small constant to avoid division by zero}
-\end{align}
+
 
 \subsubsection{Intelligent Driver Model (IDM) + Minimizing Overall Braking Induced by Lane Changes (MOBIL)}
 
@@ -264,6 +639,12 @@ $\text{MSE} = \frac{1}{N} \sum_{i=1}^{N} (y_i - \hat{y}_i)^2$
 
 % Mean Squared Error (Expected Value Form)
 $L = \mathbb{E} \left[ (y - \hat{y})^2 \right]$
+
+
+\begin{equation}
+    \mathrm{MSE}=\frac{1}{N}\sum^N_{i=1}\left(y_i-\hat y_i\right)^2
+\end{equation}
+
 
 % Gradient descent
 
@@ -715,71 +1096,6 @@ The total reward $R_t$ at time step $t$ is formulated as the sum of four distinc
 \begin{equation}
     R_t = R_{\text{TTC}} + R_{\text{goal}} + R_{\text{ego\_crash}} + R_{\text{adv\_crash}}
 \end{equation}
-
-\subsection*{1. Time-to-Collision (TTC) Squeeze Component}
-Let $A$ be the set of all controlled adversarial vehicles. For each adversary $i \in A$, the Time-to-Collision based on polygon geometry is denoted as $\tau_i$. The proximity reward term is calculated via the following piecewise function:
-\begin{equation}
-    R_{\text{TTC}} = \sum_{i \in A} f(\tau_i)
-\end{equation}
-where
-\begin{equation}
-    f(\tau_i) = 
-    \begin{cases} 
-    \dfrac{4.0}{\tau_i + 0.1} & \text{if } 1.0 \le \tau_i \le 4.0 \vspace{2mm} \\
-    -10.0 & \text{if } 0.0 \le \tau_i < 1.0 \\
-    0.0 & \text{otherwise}
-    \end{cases}
-\end{equation}
-
-\subsection*{2. Goal Achievement Component}
-Let $L_{\text{ego}}$ represent the current structural lane index pair $(u, v)$ of the ego vehicle within the road network, and let $C_{\text{ego}} \in \{0, 1\}$ be a binary indicator denoting whether the ego vehicle has crashed ($1$ for crashed, $0$ for safe):
-\begin{equation}
-    R_{\text{goal}} = 
-    \begin{cases} 
-    +50.0 & \text{if } L_{\text{ego}} = ('l', 'm') \text{ and } C_{\text{ego}} = 0 \\
-    0.0 & \text{otherwise}
-    \end{cases}
-\end{equation}
-
-\subsection*{3. Crash Guardrail Penalties}
-The severe negative constraints applied to prevent collision failures for both the ego vehicle ($R_{\text{ego\_crash}}$) and individual adversarial vehicles ($R_{\text{adv\_crash}}$ where $C_i \in \{0, 1\}$ marks the crash state of adversary $i$) are defined as:
-\begin{equation}
-    R_{\text{ego\_crash}} = 
-    \begin{cases} 
-    -100.0 & \text{if } C_{\text{ego}} = 1 \\
-    0.0 & \text{otherwise}
-    \end{cases}
-\end{equation}
-\begin{equation}
-    R_{\text{adv\_crash}} = \sum_{i \in A} g(C_i) \quad \text{where} \quad g(C_i) = 
-    \begin{cases} 
-    -50.0 & \text{if } C_i = 1 \\
-    0.0 & \text{otherwise}
-    \end{cases}
-\end{equation}
-
-\subsection*{4. Unified Dense Form}
-Expressed compactly utilizing indicator function notation $\mathbb{I}(\cdot)$, the comprehensive multi-agent reward function evaluates to:
-\begin{align}
-    R_t = \sum_{i \in A} \left[ \mathbb{I}(1 \le \tau_i \le 4) \frac{4}{\tau_i + 0.1} - 10 \cdot \mathbb{I}(0 \le \tau_i < 1) - 50 \cdot C_i \right] \nonumber \\
-    + 50 \cdot \mathbb{I}\big(L_{\text{ego}} = ('l', 'm')\big)(1 - C_{\text{ego}}) - 100 \cdot C_{\text{ego}}
-\end{align}
-
-
-
-
-For the reinforcement learning part, a multi-agent SAC RL is used
-
-
-
-
-So essentially what i wanna do is 
-- use SAC RL to explore local extrema to look for specific coordinations
-- once converged enough(the actor loss, qf loss, and alpha), freeze the policy and use nondeterministic (probabilistic) to still output actions --> remember that the alpha has both mean and standard dev
-
-the more you train the policies, the higher poss that standard dev gets smaller and smaller and essentially becomes deterministic (not the best for farming edge cases of same coordination style, different configuration)
-
-can write script that recognizes when a policy has converged enough for it to find a specific coordination and then find s
 
 
 \bibliographystyle{ieeetr}
